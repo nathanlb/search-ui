@@ -20,8 +20,7 @@ export class FacetValuesList {
   constructor(public facet: Facet, public facetValueElementKlass: IFacetValueElementKlass) {}
 
   public build(): HTMLElement {
-    this.valueContainer = document.createElement('ul');
-    $$(this.valueContainer).addClass('coveo-facet-values');
+    this.valueContainer = $$('ul', { className: 'list-group list-group-flush' }).el;
     return this.valueContainer;
   }
 

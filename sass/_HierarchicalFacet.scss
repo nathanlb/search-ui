@@ -1,6 +1,6 @@
-@import "bourbon/bourbon";
-@import "Variables";
-
+@import 'bourbon/bourbon';
+@import 'Variables';
+/**
 .CoveoHierarchicalFacet {
   
   ul.coveo-facet-values {
@@ -69,3 +69,4 @@
   margin-right: 2px;
   @include triangle(10px, #b0b3ae, right);
 }
+**/

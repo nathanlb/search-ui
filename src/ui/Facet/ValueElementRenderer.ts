@@ -40,16 +40,20 @@ export class ValueElementRenderer {
 
   public build(): ValueElementRenderer {
     this.listItem = $$('li', {
-      className: 'coveo-facet-value coveo-facet-selectable'
+      className: 'list-group-item list-group-item-action row no-gutters p-0'
     }).el;
     this.listItem.setAttribute('data-value', this.facetValue.value);
-    this.excludeIcon = this.buildExcludeIcon();
-    this.listItem.appendChild(this.excludeIcon);
+
+    const labelDiv = $$('div', {
+      className: 'form-check container p-0 m-0'
+    }).el;
 
     this.label = $$('label', {
-      className: 'coveo-facet-value-label'
+      className: 'form-check-label d-flex align-items-center flex-nowrap row no-gutters p-2 pr-3'
     }).el;
-    this.listItem.appendChild(this.label);
+
+    this.listItem.appendChild(labelDiv);
+    labelDiv.appendChild(this.label);
 
     this.excludeIcon = this.buildExcludeIcon();
     this.listItem.appendChild(this.excludeIcon);
@@ -69,22 +73,17 @@ export class ValueElementRenderer {
       }
       $$(this.label).addClass('coveo-with-computed-field');
     }
-    const labelDiv = $$('div', {
-      className: 'coveo-facet-value-label-wrapper'
-    }).el;
-    this.label.appendChild(labelDiv);
-    this.checkbox = this.buildValueCheckbox();
-    labelDiv.appendChild(this.checkbox);
 
-    this.stylishCheckbox = this.buildValueStylishCheckbox();
-    labelDiv.appendChild(this.stylishCheckbox);
+    this.checkbox = this.buildValueCheckbox();
+    this.label.appendChild(this.checkbox);
+
+    this.valueCaption = this.buildValueCaption();
+    this.label.appendChild(this.valueCaption);
 
     this.valueCount = this.buildValueCount();
     if (this.valueCount) {
-      labelDiv.appendChild(this.valueCount);
+      this.label.appendChild(this.valueCount);
     }
-    this.valueCaption = this.buildValueCaption();
-    labelDiv.appendChild(this.valueCaption);
 
     this.setCssClassOnListValueElement();
     return this;
@@ -122,7 +121,8 @@ export class ValueElementRenderer {
 
   protected buildValueCheckbox(): HTMLElement {
     const checkbox = $$('input', {
-      type: 'checkbox'
+      type: 'checkbox',
+      className: 'col-1'
     }).el;
     if (this.facetValue.selected) {
       checkbox.setAttribute('checked', 'checked');
@@ -135,17 +135,6 @@ export class ValueElementRenderer {
       checkbox.removeAttribute('disabled');
     }
     Component.pointElementsToDummyForm(checkbox);
-    return checkbox;
-  }
-
-  protected buildValueStylishCheckbox(): HTMLElement {
-    const checkbox = $$('div', {
-      className: 'coveo-facet-value-checkbox',
-      tabindex: 0
-    }).el;
-    checkbox.innerHTML = SVGIcons.icons.checkboxHookExclusionMore;
-    SVGDom.addClassToSVGInContainer(checkbox, 'coveo-facet-value-checkbox-svg');
-    this.addFocusAndBlurEventListeners(checkbox);
     return checkbox;
   }
 
@@ -178,7 +167,7 @@ export class ValueElementRenderer {
   protected buildValueCaption(): HTMLElement {
     const caption = this.facet.getValueCaption(this.facetValue);
     const valueCaption = $$('span', {
-      className: 'coveo-facet-value-caption',
+      className: 'coveo-facet-value-caption col',
       title: caption,
       'data-original-value': this.facetValue.value
     }).el;
@@ -191,7 +180,7 @@ export class ValueElementRenderer {
     const count = this.facetValue.getFormattedCount();
     if (Utils.isNonEmptyString(count)) {
       const countElement = $$('span', {
-        className: 'coveo-facet-value-count'
+        className: 'coveo-facet-value-count col'
       }).el;
       $$(countElement).text(count);
       return countElement;

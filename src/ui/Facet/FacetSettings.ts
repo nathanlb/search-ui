@@ -57,7 +57,7 @@ export class FacetSettings extends FacetSort {
    */
   public build() {
     this.settingsButton = $$('div', {
-      className: 'coveo-facet-header-settings',
+      className: 'coveo-facet-header-settings d-inline-block',
       title: l('Settings')
     }).el;
     this.settingsButton.innerHTML = SVGIcons.icons.more;

@@ -1,55 +1,54 @@
 @import 'bourbon/bourbon';
-@import 'Variables';
 
-.CoveoFacet,
-.CoveoFacetRange,
-.CoveoFacetSlider,
-.CoveoHierarchicalFacet {
-  margin: 10px 0px 10px 0px;
-  padding: 0;
-  @include defaultRoundedBorder();
-  background: white;
-  position: relative;
-}
-
-.coveo-facet-column {
-  .coveo-topSpace.coveo-with-animation,
-  .coveo-bottomSpace.coveo-with-animation {
-    @include transition(height 0.5s);
-  }
-}
-
-.coveo-facet-empty {
-  display: none;
-  &.coveo-with-placeholder {
-    display: block;
-  }
-}
-
-.coveo-facet-dependent {
-  display: none;
-}
-
-.coveo-facet-collapsed {
-  .coveo-facet-value.coveo-facet-value {
-    display: none;
-    &.coveo-selected,
-    &.coveo-excluded {
-      display: inherit;
+.CoveoFacet {
+  margin: 10px 0;
+  ul {
+    .form-check {
+      overflow: hidden;
     }
   }
-  .coveo-facet-footer {
-    display: none;
+}
+
+.coveo-facet-value-caption {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.coveo-facet-value-count {
+  text-align: right;
+}
+
+.coveo-facet-value-exclude {
+  position: absolute;
+  right: 0px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  text-align: center;
+}
+
+.coveo-facet-value-exclude-svg {
+  width: 10px;
+  height: 10px;
+  position: absolute;
+  top: 50%;
+  transform: translateX(-50%) translateY(-50%);
+  .coveo-exclusion-svg {
+    fill: black;
   }
 }
 
-.coveo-facet-fade {
-  .coveo-facet-value {
-    opacity: 0.5;
-    &.coveo-selected,
-    &.coveo-excluded,
-    &.coveo-facet-search-selectable {
-      opacity: 1;
-    }
-  }
+.coveo-facet-search-magnifier-svg,
+.coveo-facet-search-wait-animation-svg {
+  width: 10px;
+  height: 10px;
+}
+
+.coveo-facet-search-wait-animation-svg {
+  @include animation-name(coveo-spin);
+  @include animation-timing-function(linear);
+  @include animation-duration(1s);
+  @include animation-iteration-count(infinite);
 }

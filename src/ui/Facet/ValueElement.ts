@@ -136,8 +136,6 @@ export class ValueElement {
       e.stopPropagation();
       clickEvent(e);
     });
-
-    $$(this.renderer.stylishCheckbox).on('keydown', KeyboardUtils.keypressAction([KEYBOARD.SPACEBAR, KEYBOARD.ENTER], clickEvent));
   }
 
   protected handleEventForValueElement(eventBindings: IValueElementEventsBinding) {
@@ -168,8 +166,6 @@ export class ValueElement {
     };
 
     $$(this.renderer.label).on('click', selectAction);
-
-    $$(this.renderer.stylishCheckbox).on('keydown', KeyboardUtils.keypressAction([KEYBOARD.SPACEBAR, KEYBOARD.ENTER], selectAction));
   }
 
   protected handleEventForCheckboxChange(eventBindings: IValueElementEventsBinding) {

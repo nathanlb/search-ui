@@ -1,54 +1,16 @@
 @import 'Variables';
 @import 'bourbon/bourbon';
-@import url('https://fonts.googleapis.com/css?family=Lato:300,400,700');
+.d-inline-block.d-none {
+  display: none !important;
+}
+
+.d-block.d-none {
+  display: none !important;
+}
 
 .CoveoSearchInterface {
-  min-height: 100%;
-  position: relative;
-  margin: 0;
-  font-family: 'Lato', $helvetica, sans-serif;
-  font-size: 15px;
-  color: $color-dark-grey;
-
-  .coveo-highlight,
-  .highlight {
-    font-weight: bold;
-  }
-
   input[type='text']::-ms-clear {
     width: 0;
     height: 0;
-  }
-  input:focus,
-  textarea:focus,
-  select:focus {
-    outline: none;
-  }
-  input[type='text'],
-  textarea {
-    color: $color-blueish-gray;
-  }
-
-  .coveo-tab-disabled {
-    display: none;
-  }
-
-  * {
-    @include box-sizing(border-box);
-  }
-
-  .coveo-error {
-    color: $coveo-red;
-  }
-
-  &.coveo-hidden {
-    display: none;
-  }
-}
-
-body.coveo-modalBox-opened {
-  &,
-  .CoveoSearchInterface {
-    overflow: hidden;
   }
 }

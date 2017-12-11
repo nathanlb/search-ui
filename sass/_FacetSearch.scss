@@ -1,6 +1,7 @@
-@import "Variables";
-@import "FacetValues";
+@import 'Variables';
+@import 'FacetValues';
 
+/**
 .coveo-facet-search-results {
   position: absolute;
   @include defaultRoundedBorder();
@@ -183,3 +184,4 @@
     height: 11px;
   }
 }
+**/

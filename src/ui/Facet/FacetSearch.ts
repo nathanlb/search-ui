@@ -35,10 +35,10 @@ export class FacetSearch {
   public searchResults: HTMLElement;
   public search: HTMLElement;
 
+  private searchStateWidget: HTMLElement;
   private magnifier: HTMLElement;
   private wait: HTMLElement;
   private clear: HTMLElement;
-  private middle: HTMLElement;
   private input: HTMLInputElement;
   private facetSearchTimeout: number;
   private facetSearchPromise: Promise<IIndexFieldValue[]>;
@@ -178,20 +178,31 @@ export class FacetSearch {
   }
 
   private buildBaseSearch(): HTMLElement {
-    this.search = document.createElement('div');
-    $$(this.search).addClass('coveo-facet-search');
+    this.search = $$('div', {
+      className: 'card-block'
+    }).el;
 
-    this.magnifier = document.createElement('div');
-    this.magnifier.innerHTML = SVGIcons.icons.search;
-    $$(this.magnifier).addClass('coveo-facet-search-magnifier');
-    SVGDom.addClassToSVGInContainer(this.magnifier, 'coveo-facet-search-magnifier-svg');
-    this.search.appendChild(this.magnifier);
+    const searchWrapper = $$('div', {
+      className: 'input-group'
+    });
 
-    this.wait = document.createElement('div');
-    this.wait.innerHTML = SVGIcons.icons.loading;
-    $$(this.wait).addClass('coveo-facet-search-wait-animation');
-    SVGDom.addClassToSVGInContainer(this.wait, 'coveo-facet-search-wait-animation-svg');
-    this.search.appendChild(this.wait);
+    this.search.appendChild(searchWrapper.el);
+
+    this.searchStateWidget = $$('div', { className: 'input-group-addon' }, SVGIcons.icons.search).el;
+    searchWrapper.append(this.searchStateWidget);
+
+    this.magnifier = $$('div', { className: 'coveo-facet-search-magnifier' }, SVGIcons.icons.search).el;
+    SVGDom.addClassToSVGInContainer(this.magnifier, 'coveo-facet-search-magnifier-svg text-primary');
+
+    this.wait = $$(
+      'div',
+      {
+        className: 'coveo-facet-search-wait-animation'
+      },
+      SVGIcons.icons.loading
+    ).el;
+    SVGDom.addClassToSVGInContainer(this.wait, 'coveo-facet-search-wait-animation-svg text-primary');
+
     this.hideFacetSearchWaitingAnimation();
 
     this.clear = $$(
@@ -201,25 +212,22 @@ export class FacetSearch {
     ).el;
     SVGDom.addClassToSVGInContainer(this.clear, 'coveo-facet-search-clear-svg');
     this.clear.style.display = 'none';
-    this.search.appendChild(this.clear);
+    //this.search.appendChild(this.clear);
 
-    this.middle = document.createElement('div');
-    $$(this.middle).addClass('coveo-facet-search-middle');
-    this.search.appendChild(this.middle);
-
-    this.input = document.createElement('input');
-    this.input.setAttribute('type', 'text');
-    this.input.setAttribute('autocapitalize', 'off');
-    this.input.setAttribute('autocorrect', 'off');
-    $$(this.input).addClass('coveo-facet-search-input');
+    this.input = $$('input', {
+      type: 'text',
+      autocapitalize: 'off',
+      autocorrect: 'off',
+      className: 'form-control',
+      placeholder: l('Search')
+    }).el as HTMLInputElement;
     Component.pointElementsToDummyForm(this.input);
-    this.middle.appendChild(this.input);
+    searchWrapper.append(this.input);
 
     $$(this.input).on('keyup', (e: KeyboardEvent) => this.handleFacetSearchKeyUp(e));
     $$(this.clear).on('click', (e: Event) => this.handleFacetSearchClear());
     $$(this.input).on('focus', (e: Event) => this.handleFacetSearchFocus());
 
-    this.detectSearchBarAnimation();
     this.root.appendChild(this.searchResults);
     this.searchResults.style.display = 'none';
 
@@ -576,26 +584,12 @@ export class FacetSearch {
   }
 
   private showFacetSearchWaitingAnimation() {
-    $$(this.magnifier).hide();
-    $$(this.wait).show();
+    $$(this.searchStateWidget).append(this.wait);
+    $$(this.magnifier).remove();
   }
 
   private hideFacetSearchWaitingAnimation() {
-    $$(this.magnifier).show();
-    $$(this.wait).hide();
-  }
-
-  private detectSearchBarAnimation() {
-    EventsUtils.addPrefixedEvent(this.search, 'AnimationStart', event => {
-      if (event.animationName == 'grow') {
-        this.searchBarIsAnimating = true;
-      }
-    });
-
-    EventsUtils.addPrefixedEvent(this.search, 'AnimationEnd', event => {
-      if (event.animationName == 'grow') {
-        this.searchBarIsAnimating = false;
-      }
-    });
+    $$(this.searchStateWidget).append(this.magnifier);
+    $$(this.wait).remove();
   }
 }

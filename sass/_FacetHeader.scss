@@ -1,4 +1,20 @@
 @import 'Variables';
+
+.CoveoFacet .card-header svg {
+  width: 18px;
+  height: 18px;
+  margin: 0 5px;
+}
+
+.coveo-facet-header-wait-animation-svg {
+  color: $color-greyish-teal-blue;
+  vertical-align: middle;
+  @include animation-name(coveo-spin);
+  @include animation-timing-function(linear);
+  @include animation-duration(1s);
+  @include animation-iteration-count(infinite);
+}
+/**
 .coveo-facet-header {
   padding: 10px 20px;
   background: $color-blueish-white;
@@ -91,3 +107,4 @@
     @include animation-iteration-count(infinite);
   }
 }
+*/

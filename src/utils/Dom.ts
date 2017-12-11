@@ -141,14 +141,14 @@ export class Dom {
    * Show the element;
    */
   public show(): void {
-    this.el.style.display = 'block';
+    this.removeClass('d-none');
   }
 
   /**
    * Hide the element;
    */
   public hide(): void {
-    this.el.style.display = 'none';
+    this.addClass('d-none');
   }
 
   /**

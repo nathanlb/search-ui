@@ -31,7 +31,7 @@ import { OmniboxValueElement } from './OmniboxValueElement';
 import { OmniboxValuesList } from './OmniboxValuesList';
 import { IGroupByResult } from '../../rest/GroupByResult';
 import { IGroupByValue } from '../../rest/GroupByValue';
-import { ValueElementRenderer } from './ValueElementRenderer';
+
 import { FacetSearchParameters } from './FacetSearchParameters';
 import { IOmniboxDataRow } from '../Omnibox/OmniboxInterface';
 import { Initialization } from '../Base/Initialization';
@@ -756,6 +756,8 @@ export class Facet extends Component {
       this.logger.warn(`Because the ${this.options.field} facet is using value captions, alphabetical sorts are disabled.`);
     }
 
+    $$(this.element).addClass('card');
+
     ResponsiveFacets.init(this.root, this, this.options);
 
     // Serves as a way to render facet in the omnibox in the order in which they are instantiated
@@ -1080,7 +1082,8 @@ export class Facet extends Component {
   public showWaitingAnimation() {
     this.ensureDom();
     if (!this.showingWaitAnimation) {
-      $$(this.headerElement).find('.coveo-facet-header-wait-animation').style.visibility = 'visible';
+      const wait = $$(this.headerElement).find('.coveo-facet-header-wait-animation');
+      $$(wait).removeClass('invisible');
       this.showingWaitAnimation = true;
     }
   }
@@ -1091,7 +1094,8 @@ export class Facet extends Component {
   public hideWaitingAnimation(): void {
     this.ensureDom();
     if (this.showingWaitAnimation) {
-      $$(this.headerElement).find('.coveo-facet-header-wait-animation').style.visibility = 'hidden';
+      const wait = $$(this.headerElement).find('.coveo-facet-header-wait-animation');
+      $$(wait).addClass('invisible');
       this.showingWaitAnimation = false;
     }
   }
@@ -1178,10 +1182,10 @@ export class Facet extends Component {
    * [`numberOfValues`]{@link Facet.options.numberOfValues} options.
    */
   public showLess() {
-    $$(this.lessElement).removeClass('coveo-active');
+    $$(this.lessElement).hide();
     this.currentPage = 0;
     this.updateNumberOfValues();
-    $$(this.moreElement).addClass('coveo-active');
+    $$(this.moreElement).show();
     this.values.sortValuesDependingOnStatus(this.numberOfValues);
     this.rebuildValueElements();
   }
@@ -1299,9 +1303,9 @@ export class Facet extends Component {
   }
 
   protected updateAppearanceDependingOnState() {
-    $$(this.element).toggleClass('coveo-active', this.values.hasSelectedOrExcludedValues());
-    $$(this.element).toggleClass('coveo-facet-empty', !this.isAnyValueCurrentlyDisplayed());
-    $$(this.facetHeader.eraserElement).toggleClass('coveo-facet-header-eraser-visible', this.values.hasSelectedOrExcludedValues());
+    $$(this.element).toggle(this.values.hasSelectedOrExcludedValues());
+    $$(this.element).toggle(this.isAnyValueCurrentlyDisplayed());
+    $$(this.facetHeader.eraserElement).toggle(this.values.hasSelectedOrExcludedValues());
   }
 
   protected initQueryEvents() {
@@ -1421,30 +1425,18 @@ export class Facet extends Component {
 
   protected updateSearchElement(moreValuesAvailable = true) {
     if (moreValuesAvailable) {
-      const renderer = new ValueElementRenderer(this, FacetValue.create('Search'));
-      const searchButton = renderer.build().withNo([renderer.excludeIcon, renderer.icon]);
+      /*const renderer = new ValueElementRenderer(this, FacetValue.create('Search'));
+      const searchButton = renderer.build().withNo([renderer.excludeIcon, renderer.icon, renderer.checkbox]);
       $$(searchButton.listItem).addClass('coveo-facet-search-button');
-      searchButton.stylishCheckbox.removeAttribute('tabindex');
+      
 
-      // Mobile do not like label. Use click event
-      if (DeviceUtils.isMobileDevice()) {
-        $$(searchButton.label).on('click', (e: Event) => {
-          if (searchButton.checkbox.getAttribute('checked')) {
-            searchButton.checkbox.removeAttribute('checked');
-          } else {
-            searchButton.checkbox.setAttribute('checked', 'checked');
-          }
-          $$(searchButton.checkbox).trigger('change');
-          e.stopPropagation();
-          e.preventDefault();
-        });
-      }
+     
 
       $$(searchButton.checkbox).on('change', () => {
         $$(this.element).addClass('coveo-facet-searching');
         this.facetSearch.focus();
       });
-      this.facetValuesList.valueContainer.appendChild(searchButton.listItem);
+      this.facetValuesList.valueContainer.appendChild(searchButton.listItem);*/
     }
   }
 
@@ -1453,15 +1445,15 @@ export class Facet extends Component {
     moreValuesAvailable = this.nbAvailableValues > this.numberOfValues
   ) {
     if (lessElementIsShown) {
-      $$(this.lessElement).addClass('coveo-active');
+      $$(this.lessElement).show();
     } else {
-      $$(this.lessElement).removeClass('coveo-active');
+      $$(this.lessElement).hide();
     }
 
     if (moreValuesAvailable) {
-      $$(this.moreElement).addClass('coveo-active');
+      $$(this.moreElement).show();
     } else {
-      $$(this.moreElement).removeClass('coveo-active');
+      $$(this.moreElement).hide();
     }
 
     if (lessElementIsShown || moreValuesAvailable) {
@@ -1824,13 +1816,13 @@ export class Facet extends Component {
   }
 
   private buildFooter(): HTMLElement {
-    return $$('div', { className: 'coveo-facet-footer' }).el;
+    return $$('div', { className: 'card-footer p-0' }).el;
   }
 
   private buildMore(): HTMLElement {
     let more: HTMLElement;
     const svgContainer = $$('span', { className: 'coveo-facet-more-icon' }, SVGIcons.icons.arrowDown).el;
-    SVGDom.addClassToSVGInContainer(svgContainer, 'coveo-facet-more-icon-svg');
+    SVGDom.addClassToSVGInContainer(svgContainer, 'coveo-facet-more-icon-svg text-primary');
     more = $$('div', { className: 'coveo-facet-more', tabindex: 0 }, svgContainer).el;
 
     const moreAction = () => this.handleClickMore();
@@ -1842,7 +1834,7 @@ export class Facet extends Component {
   private buildLess(): HTMLElement {
     let less: HTMLElement;
     const svgContainer = $$('span', { className: 'coveo-facet-less-icon' }, SVGIcons.icons.arrowUp).el;
-    SVGDom.addClassToSVGInContainer(svgContainer, 'coveo-facet-less-icon-svg');
+    SVGDom.addClassToSVGInContainer(svgContainer, 'coveo-facet-less-icon-svg text-primary');
     less = $$('div', { className: 'coveo-facet-less', tabIndex: 0 }, svgContainer).el;
 
     const lessAction = () => this.handleClickLess();

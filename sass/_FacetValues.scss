@@ -1,7 +1,9 @@
-@import "Variables";
+@import 'Variables';
+$pixel-size: '18px';
 
+/**
 @mixin facetValuesCheckboxes($size: 'normal') {
-  $pixel-size: '18px';
+  
   @if $size == 'smaller' {
     $pixel-size: '13px';
   }
@@ -268,3 +270,4 @@
       fill: $color-light-grey;
     }
   }
+**/
