@@ -5,8 +5,8 @@ import { Utils } from '../../utils/Utils';
 import { l } from '../../strings/Strings';
 import { Component } from '../Base/Component';
 import * as _ from 'underscore';
-import { SVGIcons } from '../../utils/SVGIcons';
-import { SVGDom } from '../../utils/SVGDom';
+//import { SVGIcons } from '../../utils/SVGIcons';
+//import { SVGDom } from '../../utils/SVGDom';
 
 export class ValueElementRenderer {
   public listItem: HTMLElement;
@@ -42,8 +42,8 @@ export class ValueElementRenderer {
     this.listItem = $$('li', {
       className: 'list-group-item list-group-item-action row no-gutters p-0'
     }).el;
-    this.listItem.setAttribute('data-value', this.facetValue.value);
 
+    this.listItem.setAttribute('data-value', this.facetValue.value);
     const labelDiv = $$('div', {
       className: 'form-check container p-0 m-0'
     }).el;
@@ -90,19 +90,30 @@ export class ValueElementRenderer {
   }
 
   public setCssClassOnListValueElement(): void {
-    $$(this.listItem).toggleClass('coveo-selected', this.facetValue.selected);
     $$(this.listItem).toggleClass('coveo-excluded', this.facetValue.excluded);
   }
 
   protected buildExcludeIcon(): HTMLElement {
-    const excludeIcon = $$('div', {
-      title: l('Exclude', this.facet.getValueCaption(this.facetValue)),
-      className: 'coveo-facet-value-exclude',
-      tabindex: 0
-    }).el;
+    const excludeIcon = $$(
+      'button',
+      {
+        type: 'button',
+        title: l('Exclude', this.facet.getValueCaption(this.facetValue)),
+        className: 'close',
+        'aria-label': 'Close',
+        tabindex: 0
+      },
+      $$(
+        'span',
+        {
+          'aria-hidden': true
+        },
+        '&times;'
+      )
+    ).el;
     this.addFocusAndBlurEventListeners(excludeIcon);
-    excludeIcon.innerHTML = SVGIcons.icons.checkboxHookExclusionMore;
-    SVGDom.addClassToSVGInContainer(excludeIcon, 'coveo-facet-value-exclude-svg');
+    //excludeIcon.innerHTML = SVGIcons.icons.checkboxHookExclusionMore;
+    //SVGDom.addClassToSVGInContainer(excludeIcon, 'coveo-facet-value-exclude-svg');
     return excludeIcon;
   }
 
@@ -180,7 +191,7 @@ export class ValueElementRenderer {
     const count = this.facetValue.getFormattedCount();
     if (Utils.isNonEmptyString(count)) {
       const countElement = $$('span', {
-        className: 'coveo-facet-value-count col'
+        className: 'badge badge-secondary'
       }).el;
       $$(countElement).text(count);
       return countElement;

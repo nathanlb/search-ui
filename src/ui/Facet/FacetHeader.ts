@@ -126,7 +126,7 @@ export class FacetHeader {
 
   private buildWaitAnimation(): HTMLElement {
     this.waitElement = $$('span', { className: 'coveo-facet-header-wait-animation d-inline-block' }, SVGIcons.icons.loading).el;
-    SVGDom.addClassToSVGInContainer(this.waitElement, 'coveo-facet-header-wait-animation-svg');
+    SVGDom.addClassToSVGInContainer(this.waitElement, 'coveo-facet-header-wait-animation-svg text-secondary');
     $$(this.waitElement).addClass('invisible');
     return this.waitElement;
   }
@@ -179,7 +179,7 @@ export class FacetHeader {
       { title: l('Clear', this.options.title), className: 'coveo-facet-header-eraser d-inline-block' },
       SVGIcons.icons.mainClear
     );
-    SVGDom.addClassToSVGInContainer(eraser.el, 'coveo-facet-header-eraser-svg');
+    SVGDom.addClassToSVGInContainer(eraser.el, 'coveo-facet-header-eraser-svg text-secondary');
 
     eraser.on('click', () => {
       const cmp = this.options.facet || this.options.facetSlider;

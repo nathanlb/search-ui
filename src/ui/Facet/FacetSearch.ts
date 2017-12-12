@@ -5,12 +5,11 @@ import { Facet } from './Facet';
 import { $$, Dom } from '../../utils/Dom';
 import { Utils } from '../../utils/Utils';
 import { InitializationEvents } from '../../events/InitializationEvents';
-import { EventsUtils } from '../../utils/EventsUtils';
+
 import { FacetSearchParameters } from './FacetSearchParameters';
 import { IAnalyticsFacetMeta, analyticsActionCauseList } from '../Analytics/AnalyticsActionListMeta';
 import { IEndpointError } from '../../rest/EndpointError';
 import { Component } from '../Base/Component';
-import { PopupUtils, PopupHorizontalAlignment, PopupVerticalAlignment } from '../../utils/PopupUtils';
 import { l } from '../../strings/Strings';
 import { Assert } from '../../misc/Assert';
 import { KEYBOARD } from '../../utils/KeyboardUtils';
@@ -18,15 +17,13 @@ import { FacetValue } from './FacetValues';
 import { StringUtils } from '../../utils/StringUtils';
 import { IFacetSearchValuesListKlass } from './FacetSearchValuesList';
 import { FacetValueElement } from './FacetValueElement';
-import { ModalBox } from '../../ExternalModulesShim';
 import { SearchInterface } from '../SearchInterface/SearchInterface';
 import { ResponsiveComponentsUtils } from '../ResponsiveComponents/ResponsiveComponentsUtils';
 import { FacetValuesOrder } from './FacetValuesOrder';
 import * as _ from 'underscore';
-import 'styling/_FacetSearch';
 import { SVGIcons } from '../../utils/SVGIcons';
 import { SVGDom } from '../../utils/SVGDom';
-
+import Popper from 'popper.js';
 /**
  * Used by the {@link Facet} component to render and handle the facet search part of each facet.
  */
@@ -38,19 +35,18 @@ export class FacetSearch {
   private searchStateWidget: HTMLElement;
   private magnifier: HTMLElement;
   private wait: HTMLElement;
-  private clear: HTMLElement;
   private input: HTMLInputElement;
   private facetSearchTimeout: number;
   private facetSearchPromise: Promise<IIndexFieldValue[]>;
   private moreValuesToFetch = true;
   private onResize: (...args: any[]) => void;
   private onDocumentClick: (e: Event) => void;
-  private searchBarIsAnimating: boolean = false;
   private lastSearchWasEmpty = true;
 
   constructor(public facet: Facet, public facetSearchValuesListKlass: IFacetSearchValuesListKlass, private root: HTMLElement) {
-    this.searchResults = document.createElement('ul');
-    $$(this.searchResults).addClass('coveo-facet-search-results');
+    this.searchResults = $$('ul', {
+      className: 'coveo-facet-search-results p-0 popover'
+    }).el;
     this.onResize = _.debounce(() => {
       // Mitigate issues in UT where the window in phantom js might get resized in the scope of another test.
       // These would point to random instance of a test karma object, and not a real search interface.
@@ -81,30 +77,11 @@ export class FacetSearch {
    */
   public positionSearchResults(nextTo: HTMLElement = this.search) {
     if (this.searchResults != null) {
-      this.searchResults.style.display = 'block';
-      this.searchResults.style.width = this.facet.element.clientWidth - 40 + 'px';
-
-      if ($$(this.searchResults).css('display') == 'none') {
-        this.searchResults.style.display = '';
-      }
-      let searchBar = $$(this.search);
-      if (searchBar.css('display') == 'none' || this.searchBarIsAnimating) {
-        if ($$(this.searchResults).css('display') == 'none') {
-          this.searchResults.style.display = '';
-        }
-        EventsUtils.addPrefixedEvent(this.search, 'AnimationEnd', evt => {
-          PopupUtils.positionPopup(this.searchResults, nextTo, this.root, {
-            horizontal: PopupHorizontalAlignment.CENTER,
-            vertical: PopupVerticalAlignment.BOTTOM
-          });
-          EventsUtils.removePrefixedEvent(this.search, 'AnimationEnd', this);
-        });
-      } else {
-        PopupUtils.positionPopup(this.searchResults, nextTo, this.root, {
-          horizontal: PopupHorizontalAlignment.CENTER,
-          vertical: PopupVerticalAlignment.BOTTOM
-        });
-      }
+      $$(this.searchResults).show();
+      this.searchResults.style.width = this.facet.element.clientWidth + 'px';
+      new Popper(nextTo, this.searchResults, {
+        placement: 'bottom-end'
+      });
     }
   }
 
@@ -120,7 +97,6 @@ export class FacetSearch {
     $$(this.facet.element).removeClass('coveo-facet-searching');
     this.hideSearchResultsElement();
     this.input.value = '';
-    $$(this.clear).hide();
     this.currentlyDisplayedResults = undefined;
   }
 
@@ -205,15 +181,6 @@ export class FacetSearch {
 
     this.hideFacetSearchWaitingAnimation();
 
-    this.clear = $$(
-      'div',
-      { className: 'coveo-facet-search-clear', title: l('Clear', l('Search')) },
-      SVGIcons.icons.checkboxHookExclusionMore
-    ).el;
-    SVGDom.addClassToSVGInContainer(this.clear, 'coveo-facet-search-clear-svg');
-    this.clear.style.display = 'none';
-    //this.search.appendChild(this.clear);
-
     this.input = $$('input', {
       type: 'text',
       autocapitalize: 'off',
@@ -225,11 +192,10 @@ export class FacetSearch {
     searchWrapper.append(this.input);
 
     $$(this.input).on('keyup', (e: KeyboardEvent) => this.handleFacetSearchKeyUp(e));
-    $$(this.clear).on('click', (e: Event) => this.handleFacetSearchClear());
     $$(this.input).on('focus', (e: Event) => this.handleFacetSearchFocus());
 
     this.root.appendChild(this.searchResults);
-    this.searchResults.style.display = 'none';
+    this.hideSearchResultsElement();
 
     return this.search;
   }
@@ -237,7 +203,6 @@ export class FacetSearch {
   private handleFacetSearchKeyUp(event: KeyboardEvent) {
     Assert.exists(event);
     let isEmpty = this.input.value.trim() == '';
-    this.showOrHideClearElement(isEmpty);
     this.handleKeyboardNavigation(event, isEmpty);
   }
 
@@ -258,21 +223,6 @@ export class FacetSearch {
   private handleClickElsewhere(event: Event) {
     if (this.currentlyDisplayedResults && this.search != event.target && this.searchResults != event.target && this.input != event.target) {
       this.completelyDismissSearch();
-    }
-  }
-
-  private handleFacetSearchClear() {
-    this.input.value = '';
-    $$(this.clear).hide();
-    this.completelyDismissSearch();
-  }
-
-  private showOrHideClearElement(isEmpty: boolean) {
-    if (!isEmpty) {
-      $$(this.clear).show();
-    } else {
-      $$(this.clear).hide();
-      $$(this.search).removeClass('coveo-facet-search-no-results');
     }
   }
 
@@ -318,7 +268,7 @@ export class FacetSearch {
       if (this.searchResults.style.display != 'none') {
         this.performSelectActionOnCurrentSearchResult();
         this.completelyDismissSearch();
-      } else if ($$(this.search).is('.coveo-facet-search-no-results') && !isEmpty) {
+      } else if ($$(this.input).is('.is-invalid') && !isEmpty) {
         this.selectAllValuesMatchingSearch();
       }
     }
@@ -356,7 +306,7 @@ export class FacetSearch {
     Assert.exists(fieldValues);
     fieldValues = new FacetValuesOrder(this.facet, this.facet.facetSort).reorderValues(fieldValues);
     if (fieldValues.length > 0) {
-      $$(this.search).removeClass('coveo-facet-search-no-results');
+      $$(this.input).removeClass('is-invalid');
       this.facet.fadeInactiveValuesInMainList(this.facet.options.facetSearchDelay);
       this.rebuildSearchResults(fieldValues, facetSearchParameters);
       if (!facetSearchParameters.fetchMore) {
@@ -369,7 +319,7 @@ export class FacetSearch {
         this.moreValuesToFetch = false;
       } else {
         this.hideSearchResultsElement();
-        $$(this.search).addClass('coveo-facet-search-no-results');
+        $$(this.input).addClass('is-invalid');
       }
     }
   }
@@ -379,13 +329,16 @@ export class FacetSearch {
     if (!facetSearchParameters.fetchMore) {
       $$(this.searchResults).empty();
     }
-    let selectAll = document.createElement('li');
+    let selectAll = $$('list', {
+      className: 'list-group-item list-group-item-action p-2'
+    }).el;
+
     if (Utils.isNonEmptyString(facetSearchParameters.valueToSearch)) {
-      $$(selectAll).addClass(['coveo-facet-selectable', 'coveo-facet-search-selectable', 'coveo-facet-search-select-all']);
       $$(selectAll).text(l('SelectAll'));
       $$(selectAll).on('click', () => this.selectAllValuesMatchingSearch());
       this.searchResults.appendChild(selectAll);
     }
+
     let facetValues = _.map(fieldValues, fieldValue => {
       return FacetValue.create(fieldValue);
     });
@@ -398,10 +351,10 @@ export class FacetSearch {
       this.currentlyDisplayedResults = _.pluck(facetValues, 'value');
     }
 
-    _.each($$(this.searchResults).findAll('.coveo-facet-selectable'), (elem: HTMLElement) => {
-      $$(elem).addClass('coveo-facet-search-selectable');
+    _.each(this.getSelectables(), (elem: HTMLElement) => {
       this.setupFacetSearchResultsEvents(elem);
     });
+
     $$(this.searchResults).on('scroll', () => this.handleFacetSearchResultsScroll());
   }
 
@@ -466,7 +419,7 @@ export class FacetSearch {
   }
 
   private hideSearchResultsElement() {
-    this.searchResults.style.display = 'none';
+    $$(this.searchResults).hide();
   }
 
   private highlightCurrentQueryWithinSearchResults() {
@@ -487,15 +440,15 @@ export class FacetSearch {
 
   private makeCurrentResult(result: HTMLElement) {
     _.each(this.getSelectables(), (selectable: HTMLElement) => {
-      $$(selectable).removeClass('coveo-current');
+      $$(selectable).removeClass('active');
     });
-    $$(result).addClass('coveo-current');
+    $$(result).addClass('active');
   }
 
   private moveCurrentResultDown() {
-    let current = $$(this.searchResults).find('.coveo-current');
+    let current = $$(this.searchResults).find('.active');
     _.each(this.getSelectables(), (selectable: HTMLElement) => {
-      $$(selectable).removeClass('coveo-current');
+      $$(selectable).removeClass('active');
     });
     let allSelectables = this.getSelectables();
     let idx = _.indexOf(allSelectables, current);
@@ -509,9 +462,9 @@ export class FacetSearch {
   }
 
   private moveCurrentResultUp() {
-    let current = $$(this.searchResults).find('.coveo-current');
-    _.each($$(this.searchResults).findAll('.coveo-facet-selectable'), s => {
-      $$(s).removeClass('coveo-current');
+    let current = $$(this.searchResults).find('.active');
+    _.each(this.getSelectables(), s => {
+      $$(s).removeClass('active');
     });
 
     let allSelectables = this.getSelectables();
@@ -526,16 +479,16 @@ export class FacetSearch {
   }
 
   private highlightAndShowCurrentResultWithKeyboard(target: Dom) {
-    target.addClass('coveo-current');
+    target.addClass('active');
     this.searchResults.scrollTop = target.el.offsetTop;
   }
 
   private getSelectables(target = this.searchResults) {
-    return $$(target).findAll('.coveo-facet-selectable');
+    return $$(target).findAll('.list-group-item');
   }
 
   private performSelectActionOnCurrentSearchResult() {
-    let current = $$(this.searchResults).find('.coveo-current');
+    let current = $$(this.searchResults).find('.active');
     Assert.check(current != undefined);
 
     let checkbox = <HTMLInputElement>$$(current).find('input[type="checkbox"]');
@@ -548,7 +501,7 @@ export class FacetSearch {
   }
 
   private performExcludeActionOnCurrentSearchResult() {
-    let current = $$(this.searchResults).find('.coveo-current');
+    let current = $$(this.searchResults).find('.active');
     Assert.check(current != null);
     let valueCaption = $$(current).find('.coveo-facet-value-caption');
     let valueElement = this.facet.facetValuesList.get($$(valueCaption).text());
@@ -568,7 +521,6 @@ export class FacetSearch {
     searchParameters.setValueToSearch(this.getValueInInputForFacetSearch());
     this.facet.facetQueryController.search(searchParameters).then((fieldValues: IIndexFieldValue[]) => {
       this.completelyDismissSearch();
-      ModalBox.close(true);
       let facetValues = _.map(fieldValues, fieldValue => {
         let facetValue = this.facet.values.get(fieldValue.value);
         if (!Utils.exists(facetValue)) {

@@ -1,5 +1,3 @@
-@import 'bourbon/bourbon';
-
 .CoveoFacet {
   margin: 10px 0;
   ul {
@@ -9,35 +7,40 @@
   }
 }
 
+.CoveoFacet,
+.coveo-facet-search-results {
+  .list-group-item-action {
+    .close {
+      visibility: hidden;
+      position: absolute;
+      right: 0px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    &:hover {
+      .close {
+        visibility: visible;
+      }
+    }
+    &.coveo-excluded {
+      text-decoration: line-through;
+      &:hover {
+        .close {
+          visibility: hidden;
+        }
+      }
+    }
+  }
+}
+
+.coveo-facet-search-results {
+  z-index: 1070;
+}
+
 .coveo-facet-value-caption {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
-}
-
-.coveo-facet-value-count {
-  text-align: right;
-}
-
-.coveo-facet-value-exclude {
-  position: absolute;
-  right: 0px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 15px;
-  height: 15px;
-  text-align: center;
-}
-
-.coveo-facet-value-exclude-svg {
-  width: 10px;
-  height: 10px;
-  position: absolute;
-  top: 50%;
-  transform: translateX(-50%) translateY(-50%);
-  .coveo-exclusion-svg {
-    fill: black;
-  }
 }
 
 .coveo-facet-search-magnifier-svg,
@@ -47,8 +50,8 @@
 }
 
 .coveo-facet-search-wait-animation-svg {
-  @include animation-name(coveo-spin);
-  @include animation-timing-function(linear);
-  @include animation-duration(1s);
-  @include animation-iteration-count(infinite);
+  animation-name: coveo-spin;
+  animation-timing-function: linear;
+  animation-duration: 1s;
+  animation-iteration-count: infinite;
 }

@@ -7,12 +7,11 @@ import { Utils } from '../../utils/Utils';
 import { l } from '../../strings/Strings';
 import { QueryStateModel } from '../../models/QueryStateModel';
 import { IAnalyticsFacetMeta, analyticsActionCauseList } from '../Analytics/AnalyticsActionListMeta';
-import { DeviceUtils } from '../../utils/DeviceUtils';
-import { PopupUtils, PopupHorizontalAlignment, PopupVerticalAlignment } from '../../utils/PopupUtils';
 import * as _ from 'underscore';
 import 'styling/_FacetSettings';
 import { SVGIcons } from '../../utils/SVGIcons';
 import { SVGDom } from '../../utils/SVGDom';
+import Popper from 'popper.js';
 
 export interface IFacetSettingsKlass {
   new (sorts: string[], facet: Facet): FacetSettings;
@@ -61,7 +60,7 @@ export class FacetSettings extends FacetSort {
       title: l('Settings')
     }).el;
     this.settingsButton.innerHTML = SVGIcons.icons.more;
-    SVGDom.addClassToSVGInContainer(this.settingsButton, 'coveo-facet-settings-more-svg');
+    SVGDom.addClassToSVGInContainer(this.settingsButton, 'coveo-facet-settings-more-svg text-secondary');
 
     this.settingsPopup = $$('div', { className: 'coveo-facet-settings-popup' }).el;
 
@@ -155,7 +154,8 @@ export class FacetSettings extends FacetSort {
    * Open the settings menu
    */
   public open() {
-    PopupUtils.positionPopup(this.settingsPopup, this.settingsButton, this.facet.root, this.getPopupAlignment(), this.facet.root);
+    $$(this.facet.root).append(this.settingsPopup);
+    new Popper(this.settingsButton, this.settingsPopup, { placement: 'right-start' });
 
     if (this.hideSection && this.showSection) {
       $$(this.hideSection).toggle(!$$(this.facet.element).hasClass('coveo-facet-collapsed'));
@@ -508,14 +508,14 @@ export class FacetSettings extends FacetSort {
     }
   }
 
-  private getPopupAlignment() {
+  /*private getPopupAlignment() {
     const alignmentHorizontal = DeviceUtils.isMobileDevice() ? PopupHorizontalAlignment.CENTER : PopupHorizontalAlignment.INNERLEFT;
     const alignmentVertical = PopupVerticalAlignment.BOTTOM;
     return {
       horizontal: alignmentHorizontal,
       vertical: alignmentVertical
     };
-  }
+  }*/
 
   private filterDuplicateForRendering() {
     _.each(this.enabledSorts, (enabledSort: IFacetSortDescription, i: number) => {

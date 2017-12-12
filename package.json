@@ -120,6 +120,7 @@
   },
   "dependencies": {
     "@material/select": "^0.3.3",
+    "bootstrap": "4.0.0-beta.2",
     "circular-json": "^0.3.1",
     "coveo-styleguide": "1.13.4",
     "coveo.analytics": "^0.7.0",
@@ -132,6 +133,9 @@
     "latinize": "^0.4.0",
     "modal-box": "^2.0.10",
     "pikaday": "^1.4.0",
+    "popper.js": "^1.12.9",
+    "postcss-cli": "^4.1.1",
+    "postcss-modules": "^1.1.0",
     "underscore": "^1.8.3"
   }
 }

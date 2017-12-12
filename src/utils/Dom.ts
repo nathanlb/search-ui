@@ -17,6 +17,7 @@ export interface IOffset {
  * See {@link $$}, which is a function that wraps this class constructor, for less verbose code.
  */
 export class Dom {
+  public static scopeStyling: string;
   private static CLASS_NAME_REGEX = /-?[_a-zA-Z]+[_a-zA-Z0-9-]*/g;
   private static ONLY_WHITE_SPACE_REGEX = /^\s*$/;
 
@@ -46,7 +47,8 @@ export class Dom {
 
     for (const key in props) {
       if (key === 'className') {
-        elem.className = props['className'];
+        const classesToAdd = _.map(props['className'].split(' ') as string[], className => Dom.addScopeStyling(className));
+        elem.className = classesToAdd.join(' ');
       } else {
         const attr = key.indexOf('-') !== -1 ? key : Utils.toDashCase(key);
         elem.setAttribute(attr, props[key]);
@@ -342,9 +344,9 @@ export class Dom {
     } else {
       if (!this.hasClass(className)) {
         if (this.el.className) {
-          this.el.className += ' ' + className;
+          this.el.className += ` ${Dom.addScopeStyling(className)}`;
         } else {
-          this.el.className = className;
+          this.el.className = `${Dom.addScopeStyling(className)}`;
         }
       }
     }
@@ -355,6 +357,8 @@ export class Dom {
    * @param className Classname to remove on the the element
    */
   public removeClass(className: string): void {
+    const withScopeStyling = Dom.addScopeStyling(className);
+    this.el.className = this.el.className.replace(new RegExp(`(^|\\s)${withScopeStyling}(\\s|\\b)`, 'g'), '$1').trim();
     this.el.className = this.el.className.replace(new RegExp(`(^|\\s)${className}(\\s|\\b)`, 'g'), '$1').trim();
   }
 
@@ -407,7 +411,7 @@ export class Dom {
    * @returns {boolean}
    */
   public hasClass(className: string): boolean {
-    return _.contains(this.getClass(), className);
+    return _.contains(this.getClass(), Dom.addScopeStyling(className));
   }
 
   /**
@@ -721,6 +725,21 @@ export class Dom {
       return current;
     }
     return undefined;
+  }
+
+  private static addScopeStyling(className: string) {
+    if (className) {
+      if (className.toLowerCase().indexOf('coveo') != -1) {
+        return className;
+      }
+      if (Dom.scopeStyling) {
+        if (className.indexOf(Dom.scopeStyling) != -1) {
+          return className;
+        }
+        return `${Dom.scopeStyling}-${className}`;
+      }
+    }
+    return className;
   }
 }
 

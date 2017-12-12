@@ -1,7 +1,7 @@
 import { SearchEndpoint } from '../../rest/SearchEndpoint';
 import { ComponentOptions, IFieldOption } from '../Base/ComponentOptions';
 import { DeviceUtils } from '../../utils/DeviceUtils';
-import { $$ } from '../../utils/Dom';
+import { $$, Dom } from '../../utils/Dom';
 import { Assert } from '../../misc/Assert';
 import { QueryStateModel } from '../../models/QueryStateModel';
 import { ComponentStateModel } from '../../models/ComponentStateModel';
@@ -64,6 +64,7 @@ export interface ISearchInterfaceOptions {
   endpoint?: SearchEndpoint;
   originalOptionsObject?: any;
   allowQueriesWithoutKeywords?: boolean;
+  cssScope?: string;
 }
 
 /**
@@ -410,7 +411,8 @@ export class SearchInterface extends RootComponent implements IComponentBindings
      *
      * Default value is `undefined`, which means that the search interface does not redirect.
      */
-    searchPageUri: ComponentOptions.buildStringOption()
+    searchPageUri: ComponentOptions.buildStringOption(),
+    cssScope: ComponentOptions.buildStringOption({ defaultValue: '' })
   };
 
   public static SMALL_INTERFACE_CLASS_NAME = 'coveo-small-search-interface';
@@ -456,6 +458,7 @@ export class SearchInterface extends RootComponent implements IComponentBindings
     this.options = ComponentOptions.initComponentOptions(element, SearchInterface, options);
     Assert.exists(element);
     Assert.exists(this.options);
+    Dom.scopeStyling = this.options.cssScope;
 
     this.root = element;
     this.queryStateModel = new QueryStateModel(element);
