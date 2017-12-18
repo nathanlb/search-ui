@@ -5,7 +5,6 @@ import { IFacetSortKlass, FacetSort } from './FacetSort';
 import { $$ } from '../../utils/Dom';
 import { l } from '../../strings/Strings';
 import { IAnalyticsFacetOperatorMeta, IAnalyticsFacetMeta, analyticsActionCauseList } from '../Analytics/AnalyticsActionListMeta';
-import 'styling/_FacetHeader';
 import { SVGIcons } from '../../utils/SVGIcons';
 import { SVGDom } from '../../utils/SVGDom';
 

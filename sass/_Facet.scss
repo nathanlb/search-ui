@@ -5,6 +5,11 @@
       overflow: hidden;
     }
   }
+  .card-header svg {
+    width: 18px;
+    height: 18px;
+    margin: 0 5px;
+  }
 }
 
 .CoveoFacet,
@@ -49,9 +54,21 @@
   height: 10px;
 }
 
-.coveo-facet-search-wait-animation-svg {
+.coveo-facet-search-wait-animation-svg,
+.coveo-facet-header-wait-animation-svg {
   animation-name: coveo-spin;
   animation-timing-function: linear;
   animation-duration: 1s;
   animation-iteration-count: infinite;
+}
+
+.coveo-facet-more-icon-svg,
+.coveo-facet-less-icon-svg {
+  width: 10px;
+  height: 6px;
+}
+
+.coveo-facet-more,
+.coveo-facet-less {
+  text-align: center;
 }

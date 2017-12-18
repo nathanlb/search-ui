@@ -45,7 +45,6 @@ import { SearchAlertsEvents, ISearchAlertsPopulateMessageEventArgs } from '../..
 import * as _ from 'underscore';
 import { exportGlobally } from '../../GlobalExports';
 import 'styling/_Facet';
-import 'styling/_FacetFooter';
 import { SVGIcons } from '../../utils/SVGIcons';
 import { SVGDom } from '../../utils/SVGDom';
 import { IQueryResults } from '../../rest/QueryResults';
