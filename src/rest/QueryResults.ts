@@ -81,24 +81,24 @@ export interface IQueryResults {
   searchAPIDuration: number;
   /**
    * The duration of the query on the proxy (not always applicable, can be optional)
-   * 
+   *
    * @deprecated Use duration, indexDuration and searchAPIDuration instead.
    */
   proxyDuration?: number;
   /**
    * The duration of the query for the client.
-   * 
+   *
    * @deprecated Use searchAPIDuration instead.
    */
   clientDuration: number;
   /**
    * A unique identifier for this query, used mainly for the {@link Analytics} service.
    */
-  searchUid?: string;
+  searchUid: string;
   /**
    * The pipeline that was used for this query.
    */
-  pipeline?: string;
+  pipeline: string;
   /**
    * The search api version that was used for this query.
    */

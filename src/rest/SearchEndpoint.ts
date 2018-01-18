@@ -140,7 +140,9 @@ export class SearchEndpoint implements ISearchEndpoint {
       queryStringArguments: { organizationId: organization }
     };
 
-    let merged = SearchEndpoint.mergeConfigOptions(options, otherOptions);
+    const nonNullOtherOptions = { ...otherOptions } as ISearchEndpointOptions;
+
+    let merged = SearchEndpoint.mergeConfigOptions(options, nonNullOtherOptions);
 
     SearchEndpoint.endpoints['default'] = new SearchEndpoint(SearchEndpoint.removeUndefinedConfigOption(merged));
   }
@@ -169,12 +171,13 @@ export class SearchEndpoint implements ISearchEndpoint {
    * @param otherOptions A set of additional options to use when configuring this endpoint.
    */
   static configureOnPremiseEndpoint(uri: string, token?: string, otherOptions?: ISearchEndpointOptions) {
+    const nonNullOtherOptions = { ...otherOptions } as ISearchEndpointOptions;
     let merged = SearchEndpoint.mergeConfigOptions(
       {
         restUri: uri,
         accessToken: token
       },
-      otherOptions
+      nonNullOtherOptions
     );
 
     SearchEndpoint.endpoints['default'] = new SearchEndpoint(SearchEndpoint.removeUndefinedConfigOption(merged));
@@ -207,7 +210,7 @@ export class SearchEndpoint implements ISearchEndpoint {
    * internally.
    * @param options The custom options to apply to the new `SearchEndpoint`.
    */
-  constructor(public options?: ISearchEndpointOptions) {
+  constructor(public options: ISearchEndpointOptions) {
     Assert.exists(options);
     Assert.exists(options.restUri);
 
@@ -215,13 +218,13 @@ export class SearchEndpoint implements ISearchEndpoint {
     // is specified on a page loaded through the filesystem. This causes withCredentials
     // to NOT be set, allowing those pages to work with non Windows/Basic/Cookie
     // authentication. If anonymous is explicitly set to false, we'll use withCredentials.
-    let defaultOptions = new DefaultSearchEndpointOptions();
+    const defaultOptions = new DefaultSearchEndpointOptions();
     defaultOptions.anonymous = window.location.href.indexOf('file://') == 0 && Utils.isNonEmptyString(options.accessToken);
-    this.options = <ISearchEndpointOptions>_.extend({}, defaultOptions, options);
+    this.options = { ...defaultOptions, ...options };
 
     // Forward any debug=1 query argument to the REST API to ease debugging
-    if (SearchEndpoint.isDebugArgumentPresent()) {
-      this.options.queryStringArguments['debug'] = 1;
+    if (SearchEndpoint.isDebugArgumentPresent() && this.options.queryStringArguments) {
+      this.options.queryStringArguments.debug = 1;
     }
     this.onUnload = () => {
       this.handleUnload();
@@ -281,6 +284,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callOptions?: IEndpointCallOptions,
     callParams?: IEndpointCallParameters
   ): string {
+    callParams = { ...callParams } as IEndpointCallParameters;
     return UrlUtils.normalizeAsString({
       paths: [callParams.url, provider],
       queryAsString: callParams.queryString,
@@ -320,13 +324,14 @@ export class SearchEndpoint implements ISearchEndpoint {
   @includeIsGuestUser()
   public search(query: IQuery, callOptions?: IEndpointCallOptions, callParams?: IEndpointCallParameters): Promise<IQueryResults> {
     Assert.exists(query);
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = {
       ...callParams,
       requestData: {
         ...callParams.requestData,
-        ..._.omit(query, queryParam => Utils.isNullOrUndefined(queryParam))
+        ..._.omit(query, (queryParam: any) => Utils.isNullOrUndefined(queryParam))
       }
-    };
+    } as IEndpointCallParameters;
 
     this.logger.info('Performing REST query', query);
 
@@ -349,12 +354,6 @@ export class SearchEndpoint implements ISearchEndpoint {
       results.searchAPIDuration = results.duration;
       results.duration = TimeSpan.fromDates(start, new Date()).getMilliseconds();
 
-      // If the server specified no search ID generated one using the client-side
-      // GUID generator. We prefer server generated guids to allow tracking a query
-      // all the way from the analytics to the logs.
-      if (Utils.isNullOrEmptyString(results.searchUid)) {
-        results.searchUid = QueryUtils.createGuid();
-      }
       QueryUtils.setIndexAndUidOnQueryResults(query, results, results.searchUid, results.pipeline, results.splitTestRun);
       QueryUtils.setTermsToHighlightOnQueryResults(query, results);
       return results;
@@ -380,13 +379,14 @@ export class SearchEndpoint implements ISearchEndpoint {
     callOptions?: IEndpointCallOptions,
     callParams?: IEndpointCallParameters
   ): string {
+    callParams = { ...callParams } as IEndpointCallParameters;
     return UrlUtils.normalizeAsString({
       paths: callParams.url,
       queryAsString: callParams.queryString,
       query: {
         numberOfResults: numberOfResults ? numberOfResults.toString() : null,
         format: 'xlsx',
-        ...this.buildQueryAsQueryString(null, query),
+        ...this.buildQueryAsQueryString(undefined, query),
         ...this.buildBaseQueryString(callOptions)
       }
     });
@@ -419,7 +419,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callParams?: IEndpointCallParameters
   ): Promise<ArrayBuffer> {
     Assert.exists(documentUniqueId);
-
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = UrlUtils.merge(callParams, {
       paths: callParams.url,
       query: {
@@ -430,7 +430,7 @@ export class SearchEndpoint implements ISearchEndpoint {
 
     this.logger.info('Performing REST query for datastream ' + dataStreamType + ' on item uniqueID ' + documentUniqueId);
 
-    return this.performOneCall(callParams, callOptions).then((results: ArrayBuffer) => {
+    return this.performOneCall<ArrayBuffer>(callParams, callOptions).then(results => {
       this.logger.info('REST query successful', results, documentUniqueId);
       return results;
     });
@@ -453,6 +453,8 @@ export class SearchEndpoint implements ISearchEndpoint {
     callOptions: IViewAsHtmlOptions = {},
     callParams?: IEndpointCallParameters
   ): string {
+    callParams = { ...callParams } as IEndpointCallParameters;
+    callOptions = { ...callOptions } as IViewAsHtmlOptions;
     return UrlUtils.normalizeAsString({
       paths: callParams.url,
       queryAsString: callParams.queryString,
@@ -480,6 +482,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callOptions?: IEndpointCallOptions,
     callParams?: IEndpointCallParameters
   ): Promise<IQueryResult> {
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = UrlUtils.merge(callParams, {
       paths: callParams.url,
       queryAsString: callParams.queryString,
@@ -511,6 +514,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callOptions?: IEndpointCallOptions,
     callParams?: IEndpointCallParameters
   ): Promise<string> {
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = UrlUtils.merge(callParams, {
       paths: callParams.url,
       queryAsString: callParams.queryString,
@@ -542,6 +546,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callParams?: IEndpointCallParameters
   ): Promise<HTMLDocument> {
     callOptions = { ...callOptions };
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = UrlUtils.merge(
       {
         ...callParams,
@@ -574,6 +579,7 @@ export class SearchEndpoint implements ISearchEndpoint {
   @path('/html')
   @accessTokenInUrl()
   public getViewAsHtmlUri(documentUniqueID: string, callOptions?: IViewAsHtmlOptions, callParams?: IEndpointCallParameters): string {
+    callParams = { ...callParams } as IEndpointCallParameters;
     return UrlUtils.normalizeAsString({
       paths: callParams.url,
       queryAsString: callParams.queryString,
@@ -594,6 +600,7 @@ export class SearchEndpoint implements ISearchEndpoint {
   ): Promise<IIndexFieldValue[]> {
     Assert.exists(request);
     this.logger.info('Performing REST query to list field values', request);
+    callParams = { ...callParams } as IEndpointCallParameters;
 
     return this.performOneCall<IGroupByResult>(callParams, callOptions).then(data => {
       this.logger.info('REST list field values successful', data.values, request);
@@ -617,7 +624,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callParams?: IEndpointCallParameters
   ): Promise<IIndexFieldValue[]> {
     Assert.exists(request);
-
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = {
       ...callParams,
       requestData: {
@@ -645,6 +652,7 @@ export class SearchEndpoint implements ISearchEndpoint {
   @responseType('text')
   public listFields(callOptions?: IEndpointCallOptions, callParams?: IEndpointCallParameters): Promise<IFieldDescription[]> {
     this.logger.info('Listing fields');
+    callParams = { ...callParams } as IEndpointCallParameters;
 
     return this.performOneCall<IListFieldsResult>(callParams, callOptions).then(data => {
       this.logger.info('REST list fields successful', data.fields);
@@ -663,6 +671,7 @@ export class SearchEndpoint implements ISearchEndpoint {
   @responseType('text')
   public extensions(callOptions?: IEndpointCallOptions, callParams?: IEndpointCallParameters): Promise<IExtension[]> {
     this.logger.info('Performing REST query to list extensions');
+    callParams = { ...callParams } as IEndpointCallParameters;
 
     return this.performOneCall<IExtension[]>(callParams, callOptions).then(extensions => {
       this.logger.info('REST query successful', extensions);
@@ -686,7 +695,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callParams?: IEndpointCallParameters
   ): Promise<boolean> {
     this.logger.info('Performing REST query to rate a document', ratingRequest);
-
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = {
       ...callParams,
       requestData: {
@@ -716,6 +725,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callParams?: IEndpointCallParameters
   ): Promise<boolean> {
     this.logger.info('Performing REST query to tag an item', taggingRequest);
+    callParams = { ...callParams } as IEndpointCallParameters;
 
     callParams = {
       ...callParams,
@@ -750,11 +760,12 @@ export class SearchEndpoint implements ISearchEndpoint {
     callOptions?: IEndpointCallOptions,
     callParams?: IEndpointCallParameters
   ): Promise<IQuerySuggestResponse> {
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = {
       ...callParams,
       requestData: {
         ...callParams.requestData,
-        ..._.omit(request, parameter => Utils.isNullOrUndefined(parameter))
+        ..._.omit(request, (parameter: any) => Utils.isNullOrUndefined(parameter))
       }
     };
 
@@ -793,6 +804,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callOptions?: IEndpointCallOptions,
     callParams?: IEndpointCallParameters
   ): Promise<ISubscription> {
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams.requestData = request;
 
     this.logger.info('Performing REST query to follow an item or a query', request);
@@ -803,7 +815,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     });
   }
 
-  private currentListSubscriptions: Promise<ISubscription[]>;
+  private currentListSubscriptions: Promise<ISubscription[]> | null;
 
   /**
    * Gets a Promise of an array of the current subscriptions.
@@ -829,6 +841,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     }
 
     if (this.currentListSubscriptions == null) {
+      callParams = { ...callParams } as IEndpointCallParameters;
       callParams = UrlUtils.merge(callParams, {
         paths: callParams.url,
         query: {
@@ -873,6 +886,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callOptions?: IEndpointCallOptions,
     callParams?: IEndpointCallParameters
   ): Promise<ISubscription> {
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = UrlUtils.merge(
       {
         ...callParams,
@@ -910,6 +924,7 @@ export class SearchEndpoint implements ISearchEndpoint {
     callOptions?: IEndpointCallOptions,
     callParams?: IEndpointCallParameters
   ): Promise<ISubscription> {
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = UrlUtils.merge(callParams, {
       paths: [callParams.url, subscription.id]
     });
@@ -924,6 +939,7 @@ export class SearchEndpoint implements ISearchEndpoint {
   @path('/log')
   @method('POST')
   public logError(sentryLog: ISentryLog, callOptions?: IEndpointCallOptions, callParams?: IEndpointCallParameters) {
+    callParams = { ...callParams } as IEndpointCallParameters;
     callParams = {
       ...callParams,
       requestData: {
@@ -993,15 +1009,15 @@ export class SearchEndpoint implements ISearchEndpoint {
     };
   }
 
-  private buildQueryAsQueryString(query: string, queryObject: IQuery): Record<string, any> {
-    queryObject = { ...queryObject };
+  private buildQueryAsQueryString(query: string | undefined, queryObject?: IQuery): Record<string, any> {
+    queryObject = { ...queryObject } as IQuery;
 
     // In an ideal parallel reality, the entire query used in the 'search' call is used here.
     // In this reality however, we must support GET calls (ex: GET /html) for CORS/JSONP/IE reasons.
     // Therefore, we cherry-pick parts of the query to include in a 'query string' instead of a body payload.
     const queryParameters: Record<string, any> = {};
     ['q', 'aq', 'cq', 'dq', 'searchHub', 'tab', 'locale', 'pipeline', 'lowercaseOperators', 'fieldsToInclude'].forEach(key => {
-      queryParameters[key] = queryObject[key];
+      queryParameters[key] = (<IQuery>queryObject)[key];
     });
 
     const context: Record<string, any> = {};
@@ -1018,7 +1034,7 @@ export class SearchEndpoint implements ISearchEndpoint {
   }
 
   private buildViewAsHtmlQueryString(uniqueId: string, callOptions?: IViewAsHtmlOptions) {
-    callOptions = _.extend({}, callOptions);
+    callOptions = { ...callOptions } as IViewAsHtmlOptions;
 
     return {
       uniqueId,
@@ -1038,14 +1054,14 @@ export class SearchEndpoint implements ISearchEndpoint {
     });
 
     return this.caller
-      .call(params)
-      .then((response?: ISuccessResponse<T>) => {
+      .call<T>(params)
+      .then(response => {
         if (response.data == null) {
           response.data = <any>{};
         }
         return response.data;
       })
-      .catch((error?: IErrorResponse) => {
+      .catch((error: IErrorResponse) => {
         if (autoRenewToken && this.canRenewAccessToken() && this.isAccessTokenExpiredStatus(error.statusCode)) {
           return this.renewAccessToken()
             .then(() => {
@@ -1084,18 +1100,21 @@ export class SearchEndpoint implements ISearchEndpoint {
 
   private renewAccessToken(): Promise<string> {
     this.logger.info('Renewing expired access token');
-    return this.options
-      .renewAccessToken()
-      .then((token: string) => {
-        Assert.isNonEmptyString(token);
-        this.options.accessToken = token;
-        this.createEndpointCaller();
-        return token;
-      })
-      .catch((e: string) => {
-        this.logger.error('Failed to renew access token', e);
-        return e;
-      });
+    if (this.options.renewAccessToken) {
+      return this.options
+        .renewAccessToken()
+        .then((token: string) => {
+          Assert.isNonEmptyString(token);
+          this.options.accessToken = token;
+          this.createEndpointCaller();
+          return token;
+        })
+        .catch((e: string) => {
+          this.logger.error('Failed to renew access token', e);
+          return e;
+        });
+    }
+    throw new Error('No renew access token function');
   }
 
   private isMissingAuthenticationProviderStatus(status: number): boolean {
@@ -1119,7 +1138,7 @@ export class SearchEndpoint implements ISearchEndpoint {
 // responseType: '',
 // errorsAsSuccess: false
 
-function decoratorSetup(target: Object, key: string, descriptor: TypedPropertyDescriptor<any>) {
+function decoratorSetup(target: { [propName: string]: any }, key: string, descriptor: TypedPropertyDescriptor<any>) {
   return {
     originalMethod: descriptor.value,
     nbParams: target[key].prototype.constructor.length
@@ -1143,7 +1162,7 @@ function path(path: string) {
     const { originalMethod, nbParams } = decoratorSetup(target, key, descriptor);
 
     descriptor.value = function(...args: any[]) {
-      const url = this.buildBaseUri(path);
+      const url = (<any>this).buildBaseUri(path);
       if (args[nbParams - 1]) {
         args[nbParams - 1].url = url;
       } else {
@@ -1162,7 +1181,7 @@ function alertsPath(path: string) {
     const { originalMethod, nbParams } = decoratorSetup(target, key, descriptor);
 
     descriptor.value = function(...args: any[]) {
-      const url = this.buildSearchAlertsUri(path);
+      const url = (<any>this).buildSearchAlertsUri(path);
       if (args[nbParams - 1]) {
         args[nbParams - 1].url = url;
       } else {
@@ -1236,14 +1255,16 @@ function accessTokenInUrl(tokenKey: string = 'access_token') {
       let queryString: string[] = [];
 
       if (Utils.isNonEmptyString(endpointInstance.options.accessToken)) {
-        queryString.push(tokenKey + '=' + Utils.safeEncodeURIComponent(endpointInstance.options.accessToken));
+        queryString.push(
+          tokenKey + '=' + Utils.safeEncodeURIComponent(endpointInstance.options.accessToken ? endpointInstance.options.accessToken : '')
+        );
       }
 
       return queryString;
     };
 
     descriptor.value = function(...args: any[]) {
-      const queryString = buildAccessToken(tokenKey, this);
+      const queryString = buildAccessToken(tokenKey, <any>this);
       if (args[nbParams - 1]) {
         args[nbParams - 1].queryString = args[nbParams - 1].queryString.concat(queryString);
       } else {
@@ -1334,7 +1355,7 @@ function includeIsGuestUser() {
   return function(target: Object, key: string, descriptor: TypedPropertyDescriptor<any>) {
     const { originalMethod, nbParams } = decoratorSetup(target, key, descriptor);
     descriptor.value = function(...args: any[]) {
-      let isGuestUser = this.options.isGuestUser;
+      let isGuestUser = (<any>this).options.isGuestUser;
 
       if (args[nbParams - 1]) {
         args[nbParams - 1].requestData.isGuestUser = isGuestUser;

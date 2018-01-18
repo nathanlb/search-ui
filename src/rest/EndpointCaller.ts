@@ -117,7 +117,7 @@ export interface IErrorResponse extends IResponse<IStringMap<any>> {
   /**
    * Data about the error
    */
-  data?: {
+  data: {
     /**
      * Message for the error
      */
@@ -141,7 +141,7 @@ export interface IEndpointCallerOptions {
   /**
    * The access token to use for this endpoint.
    */
-  accessToken?: string;
+  accessToken?: string | null;
   /**
    * The username to use to log into this endpoint. Used for basic auth.<br/>
    * Not used if accessToken is provided.

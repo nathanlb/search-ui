@@ -36,7 +36,7 @@ export class Utils {
     return value ? value.toString() : '';
   }
 
-  static isNullOrEmptyString(str: string): boolean {
+  static isNullOrEmptyString(str: string | null | undefined): boolean {
     return Utils.isNullOrUndefined(str) || !Utils.isNonEmptyString(str);
   }
 

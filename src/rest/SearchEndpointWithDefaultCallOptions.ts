@@ -25,7 +25,7 @@ export class SearchEndpointWithDefaultCallOptions implements ISearchEndpoint {
   options: ISearchEndpointOptions;
 
   constructor(private endpoint: ISearchEndpoint, private callOptions?: IEndpointCallOptions) {
-    this.options = endpoint.options;
+    this.options = endpoint.options as ISearchEndpointOptions;
   }
 
   public getBaseUri(): string {

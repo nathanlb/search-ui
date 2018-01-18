@@ -3,7 +3,7 @@ import { Utils } from './Utils';
 import { IEndpointCallParameters } from '../rest/EndpointCaller';
 
 export interface IUrlNormalize {
-  paths: string[] | string;
+  paths: (string | undefined | null)[] | string;
   queryAsString?: string[] | string;
   query?: Record<string, any>;
 }
@@ -128,8 +128,12 @@ export class UrlUtils {
     return targetString;
   }
 
-  private static toArray(parameter: string | string[]): string[] {
-    return isArray(parameter) ? parameter : [parameter];
+  private static toArray(parameter: string | (string | null | undefined)[]): string[] {
+    if (isArray(parameter)) {
+      return compact(parameter) as string[];
+    } else {
+      return compact([parameter]);
+    }
   }
 
   private static encodeKeyValuePair(pair: string) {

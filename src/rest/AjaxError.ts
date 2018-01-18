@@ -2,8 +2,8 @@ import { Assert } from '../misc/Assert';
 import { IEndpointError } from '../rest/EndpointError';
 
 export class AjaxError implements IEndpointError {
-  public type;
-  public name;
+  public type: string;
+  public name: string;
 
   constructor(public message: string, public status: number) {
     Assert.exists(message);

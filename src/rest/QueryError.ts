@@ -10,10 +10,17 @@ export class QueryError implements IEndpointError {
   public name: string;
 
   constructor(errorResponse: IErrorResponse) {
+    const nonNullData = {
+      message: 'NoMessage',
+      type: 'NoType',
+      executionReport: '',
+      ...errorResponse.data
+    };
+
     this.status = errorResponse.statusCode;
-    this.message = errorResponse.data.message;
-    this.name = this.type = errorResponse.data.type;
-    this.queryExecutionReport = errorResponse.data.executionReport;
+    this.message = nonNullData.message;
+    this.name = nonNullData.type;
+    this.queryExecutionReport = nonNullData.executionReport;
 
     Assert.isNumber(this.status);
     Assert.isNonEmptyString(this.message);

@@ -224,4 +224,6 @@ export interface IQuery {
    * This parameter is normally controlled by {@link SearchInterface.options.allowEmptyQuery} option.
    */
   allowQueriesWithoutKeywords?: boolean;
+
+  [propName: string]: any;
 }

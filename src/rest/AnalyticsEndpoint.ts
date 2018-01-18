@@ -30,7 +30,7 @@ export class AnalyticsEndpoint {
   static CUSTOM_ANALYTICS_VERSION = undefined;
   static VISITOR_COOKIE_TIME = 10000 * 24 * 60 * 60 * 1000;
 
-  static pendingRequest: Promise<any>;
+  static pendingRequest: Promise<any> | null;
 
   private visitId: string;
   private organization: string;
@@ -68,11 +68,12 @@ export class AnalyticsEndpoint {
     });
   }
 
-  public sendSearchEvents(searchEvents: ISearchEvent[]): Promise<IAPIAnalyticsSearchEventsResponse> {
+  public sendSearchEvents(searchEvents: ISearchEvent[]): Promise<IAPIAnalyticsSearchEventsResponse> | null {
     if (searchEvents.length > 0) {
       this.logger.info('Logging analytics search events', searchEvents);
       return this.sendToService<ISearchEvent[], IAPIAnalyticsSearchEventsResponse>(searchEvents, 'searches', 'searchEvents');
     }
+    return null;
   }
 
   public sendDocumentViewEvent(documentViewEvent: IClickEvent): Promise<IAPIAnalyticsEventResponse> {
@@ -121,7 +122,7 @@ export class AnalyticsEndpoint {
         .finally(() => {
           AnalyticsEndpoint.pendingRequest = null;
         });
-      return AnalyticsEndpoint.pendingRequest;
+      return AnalyticsEndpoint.pendingRequest as Promise<R>;
     } else {
       return AnalyticsEndpoint.pendingRequest.finally(() => {
         return this.sendToService<D, R>(data, path, paramName);
@@ -146,8 +147,8 @@ export class AnalyticsEndpoint {
   }
 
   private handleAnalyticsEventResponse(response: IAPIAnalyticsEventResponse | IAPIAnalyticsSearchEventsResponse) {
-    let visitId: string;
-    let visitorId: string;
+    let visitId: string | null = null;
+    let visitorId: string | null = null;
 
     if (response['visitId']) {
       visitId = response['visitId'];

@@ -21,7 +21,7 @@ export interface ISearchEndpointOptions extends IEndpointCallerOptions {
   /**
    * The uri for the search endpoint. eg: cloudplatform.coveo.com/rest/search
    */
-  restUri?: string;
+  restUri: string;
   version?: string;
   /**
    * Query string arguments to add to every request to the search endpoint.<br/>
@@ -58,6 +58,8 @@ export interface ISearchEndpointOptions extends IEndpointCallerOptions {
    */
   searchAlertsUri?: string;
   isGuestUser?: boolean;
+
+  [propName: string]: any;
 }
 
 /**
