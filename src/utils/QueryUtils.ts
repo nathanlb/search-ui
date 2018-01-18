@@ -5,51 +5,7 @@ import { Assert } from '../misc/Assert';
 import { Utils } from '../utils/Utils';
 import * as _ from 'underscore';
 
-declare let crypto: Crypto;
-
 export class QueryUtils {
-  static createGuid(): string {
-    let guid: string;
-    let success: boolean = false;
-    if (typeof crypto != 'undefined' && typeof crypto.getRandomValues != 'undefined') {
-      try {
-        guid = QueryUtils.generateWithCrypto();
-        success = true;
-      } catch (e) {
-        success = false;
-      }
-    }
-
-    if (!success) {
-      guid = QueryUtils.generateWithRandom();
-    }
-
-    return guid;
-  }
-
-  // This method is a fallback as it's generate a lot of collisions in Chrome.
-  static generateWithRandom(): string {
-    // http://stackoverflow.com/a/2117523
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      let r = (Math.random() * 16) | 0,
-        v = c == 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
-
-  static generateWithCrypto(): string {
-    let buf = new Uint16Array(8);
-    crypto.getRandomValues(buf);
-    let S4 = function(num) {
-      let ret = num.toString(16);
-      while (ret.length < 4) {
-        ret = '0' + ret;
-      }
-      return ret;
-    };
-    return S4(buf[0]) + S4(buf[1]) + '-' + S4(buf[2]) + '-' + S4(buf[3]) + '-' + S4(buf[4]) + '-' + S4(buf[5]) + S4(buf[6]) + S4(buf[7]);
-  }
-
   static setStateObjectOnQueryResults(state: any, results: IQueryResults) {
     QueryUtils.setPropertyOnResults(results, 'state', state);
   }
@@ -58,7 +14,7 @@ export class QueryUtils {
     QueryUtils.setPropertyOnResult(result, 'state', state);
   }
 
-  static setSearchInterfaceObjectOnQueryResult(searchInterface, result: IQueryResult) {
+  static setSearchInterfaceObjectOnQueryResult(searchInterface: any, result: IQueryResult) {
     QueryUtils.setPropertyOnResult(result, 'searchInterface', searchInterface);
   }
 
@@ -69,7 +25,11 @@ export class QueryUtils {
     QueryUtils.setPropertyOnResults(results, 'queryUid', queryUid);
     QueryUtils.setPropertyOnResults(results, 'pipeline', pipeline);
     QueryUtils.setPropertyOnResults(results, 'splitTestRun', splitTestRun);
-    QueryUtils.setPropertyOnResults(results, 'index', index, () => ++index);
+    QueryUtils.setPropertyOnResults(results, 'index', index, () => {
+      if (index) {
+        ++index;
+      }
+    });
   }
 
   static setTermsToHighlightOnQueryResults(query: IQuery, results: IQueryResults) {
@@ -215,7 +175,7 @@ export class QueryUtils {
     _.each(result.childResults, (child: IQueryResult) => {
       child[property] = value;
     });
-    if (!Utils.isNullOrUndefined(result.parentResult)) {
+    if (result.parentResult) {
       result.parentResult[property] = value;
     }
   }

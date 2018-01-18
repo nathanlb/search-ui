@@ -3,6 +3,13 @@ import { Utils } from './Utils';
 import { l } from '../strings/Strings';
 import * as _ from 'underscore';
 import * as moment from 'moment';
+
+declare global {
+  interface StringConstructor {
+    locale: string;
+  }
+}
+
 /**
  * The `IDateToStringOptions` interface describes a set of options to use when converting a standard Date object to a
  * string using the [ `dateToString` ]{@link DateUtils.dateToString}, or the
@@ -152,7 +159,7 @@ class DefaultDateToStringOptions extends Options implements IDateToStringOptions
   includeTimeIfToday = true;
   includeTimeIfThisWeek = true;
   alwaysIncludeTime = false;
-  predefinedFormat: string = undefined;
+  predefinedFormat: string | undefined = undefined;
 }
 
 /**
@@ -180,6 +187,8 @@ export class DateUtils {
       const formats = ['YYYY/MM/DD@HH:mm:ssZ', moment.ISO_8601];
       const dateMoment = moment(date, formats);
       return dateMoment.toDate();
+    } else {
+      throw new Error('Invalid parameter for Date : ' + date);
     }
   }
 
@@ -241,7 +250,8 @@ export class DateUtils {
 
   private static isTodayYesterdayOrTomorrow(d: Date, options?: IDateToStringOptions): boolean {
     const dateOnly = moment(DateUtils.keepOnlyDatePart(d));
-    const today = moment(DateUtils.keepOnlyDatePart(options.now));
+    const nonNullOptions = { now: new Date(), ...options };
+    const today = moment(DateUtils.keepOnlyDatePart(nonNullOptions.now));
     const daysDifference = dateOnly.diff(today, 'days');
     return daysDifference == 0 || daysDifference == 1 || daysDifference == -1;
   }
@@ -262,17 +272,17 @@ export class DateUtils {
       return '';
     }
 
-    options = new DefaultDateToStringOptions().merge(options);
+    const nonNullOptions = { ...new DefaultDateToStringOptions(), ...options };
 
     const dateOnly = moment(DateUtils.keepOnlyDatePart(date));
-    const today = moment(DateUtils.keepOnlyDatePart(options.now));
+    const today = moment(DateUtils.keepOnlyDatePart(nonNullOptions.now));
 
-    if (options.predefinedFormat) {
+    if (nonNullOptions.predefinedFormat) {
       // yyyy was used to format dates before implementing moment.js, which only recognizes YYYY.
-      return dateOnly.format(options.predefinedFormat.replace(/yyyy/g, 'YYYY'));
+      return dateOnly.format(nonNullOptions.predefinedFormat.replace(/yyyy/g, 'YYYY'));
     }
 
-    if (options.useTodayYesterdayAndTomorrow) {
+    if (nonNullOptions.useTodayYesterdayAndTomorrow) {
       if (DateUtils.isTodayYesterdayOrTomorrow(date, options)) {
         return moment(dateOnly).calendar(moment(today));
       }
@@ -280,7 +290,7 @@ export class DateUtils {
 
     const isThisWeek = dateOnly.diff(moment(today), 'weeks') == 0;
 
-    if (options.useWeekdayIfThisWeek && isThisWeek) {
+    if (nonNullOptions.useWeekdayIfThisWeek && isThisWeek) {
       if (dateOnly.valueOf() > today.valueOf()) {
         return l('NextDay', dateOnly.format('dddd'));
       } else if (dateOnly.valueOf() < today.valueOf()) {
@@ -290,11 +300,11 @@ export class DateUtils {
       }
     }
 
-    if (options.omitYearIfCurrentOne && dateOnly.year() === today.year()) {
+    if (nonNullOptions.omitYearIfCurrentOne && dateOnly.year() === today.year()) {
       return dateOnly.format('MMMM DD');
     }
 
-    if (options.useLongDateFormat) {
+    if (nonNullOptions.useLongDateFormat) {
       return dateOnly.format('dddd, MMMM DD, YYYY');
     }
 
@@ -331,17 +341,17 @@ export class DateUtils {
       return '';
     }
 
-    options = new DefaultDateToStringOptions().merge(options);
-    const today = DateUtils.keepOnlyDatePart(options.now);
+    const nonNullOptions = { ...new DefaultDateToStringOptions(), ...options };
+    const today = DateUtils.keepOnlyDatePart(nonNullOptions.now);
     const isThisWeek = moment(date).diff(moment(today), 'weeks') == 0;
     const datePart = DateUtils.dateToString(date, options);
     const dateWithoutTime = DateUtils.keepOnlyDatePart(date);
 
     if (
       moment(date).isValid() &&
-      (options.alwaysIncludeTime == true ||
-        (options.includeTimeIfThisWeek == true && isThisWeek) ||
-        (options.includeTimeIfToday == true && dateWithoutTime.valueOf() == today.valueOf()))
+      (nonNullOptions.alwaysIncludeTime == true ||
+        (nonNullOptions.includeTimeIfThisWeek == true && isThisWeek) ||
+        (nonNullOptions.includeTimeIfToday == true && dateWithoutTime.valueOf() == today.valueOf()))
     ) {
       return datePart + ', ' + DateUtils.timeToString(date);
     } else {

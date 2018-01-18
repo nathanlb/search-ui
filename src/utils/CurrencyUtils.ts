@@ -22,16 +22,16 @@ export class CurrencyUtils {
 
     Assert.isNumber(value);
 
-    options = new DefaultCurrencyToStringOptions().merge(options);
+    const nonNullOptions = { ...new DefaultCurrencyToStringOptions(), ...options };
 
     var currency = Globalize.culture().numberFormat.currency;
     var backup = currency.symbol;
 
-    if (Utils.isNonEmptyString(options.symbol)) {
-      currency.symbol = options.symbol;
+    if (Utils.isNonEmptyString(nonNullOptions.symbol)) {
+      currency.symbol = nonNullOptions.symbol;
     }
 
-    var str = Globalize.format(value, 'c' + options.decimals.toString());
+    var str = Globalize.format(value, 'c' + nonNullOptions.decimals.toString());
     currency.symbol = backup;
 
     return str;

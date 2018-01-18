@@ -15,5 +15,5 @@ export interface IComputedFieldRequest {
    * --minimum: Retrieves the smallest of all values.
    * --maximum: Retrieves the largest of all values.
    */
-  operation: string;
+  operation: string | undefined;
 }

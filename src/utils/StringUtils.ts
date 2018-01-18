@@ -1,8 +1,8 @@
 import { Assert } from '../misc/Assert';
 import { IHighlight } from '../rest/Highlight';
 import { $$ } from '../utils/Dom';
+import { find, map, isEmpty } from 'underscore';
 import * as latinize from 'latinize';
-import * as _ from 'underscore';
 
 export class StringUtils {
   static javascriptEncode(value: string): string {
@@ -45,8 +45,8 @@ export class StringUtils {
     let encoded = StringUtils.regexEncode(value);
 
     if (ignoreAccent) {
-      return _.map(encoded, (char: string) => {
-        let regexp = _.find(StringUtils.accented, (regexp: RegExp) => char.match(regexp) != null);
+      return map(encoded, (char: string) => {
+        let regexp = find(StringUtils.accented, (regexp: RegExp) => char.match(regexp) != null);
         if (regexp) {
           return regexp.source;
         }
@@ -68,7 +68,7 @@ export class StringUtils {
     return encoded;
   }
 
-  static getHighlights(strToSearch: string, regexToFind: RegExp, dataHighlightGroupTerm: string): IHighlight[] {
+  static getHighlights(strToSearch: string, regexToFind: RegExp, dataHighlightGroupTerm: string): IHighlight[] | null {
     let match,
       indexes: IHighlight[] = [];
 
@@ -81,7 +81,7 @@ export class StringUtils {
         break;
       }
     }
-    return _.isEmpty(indexes) ? undefined : indexes;
+    return isEmpty(indexes) ? null : indexes;
   }
 
   static encodeCarriageReturn(strToEncode: string): string {
@@ -95,7 +95,7 @@ export class StringUtils {
 
   static match(value: string, regex: RegExp) {
     let results: string[][] = [];
-    let arr: string[];
+    let arr: string[] | null;
     while ((arr = regex.exec(value)) !== null) {
       results.push(arr);
     }

@@ -4,7 +4,7 @@ export class EventsUtils {
   private static prefixes = ['webkit', 'moz', 'MS', 'o', ''];
 
   // eventName must be in PascalCase
-  public static addPrefixedEvent(element: HTMLElement, pascalCaseEventName: string, callback) {
+  public static addPrefixedEvent(element: HTMLElement, pascalCaseEventName: string, callback: () => void) {
     _.each(this.prefixes, prefix => {
       if (prefix == '') {
         pascalCaseEventName = pascalCaseEventName.toLowerCase();
@@ -14,7 +14,7 @@ export class EventsUtils {
   }
 
   // eventName must be in PascalCase
-  public static removePrefixedEvent(element: HTMLElement, pascalCaseEventName: string, callback) {
+  public static removePrefixedEvent(element: HTMLElement, pascalCaseEventName: string, callback: () => void) {
     _.each(this.prefixes, prefix => {
       if (prefix == '') {
         pascalCaseEventName = pascalCaseEventName.toLowerCase();

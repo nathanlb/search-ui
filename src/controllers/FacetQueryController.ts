@@ -18,11 +18,11 @@ import * as _ from 'underscore';
 import { QueryBuilderExpression } from '../ui/Base/QueryBuilderExpression';
 
 export class FacetQueryController {
-  public expressionToUseForFacetSearch: string;
+  public expressionToUseForFacetSearch: string | undefined;
   public basicExpressionToUseForFacetSearch: string;
   public advancedExpressionToUseForFacetSearch: string;
-  public constantExpressionToUseForFacetSearch: string;
-  public lastGroupByRequestIndex: number;
+  public constantExpressionToUseForFacetSearch: string | undefined;
+  public lastGroupByRequestIndex: number | undefined;
   public lastGroupByRequest: IGroupByRequest;
   public lastGroupByResult: IGroupByResult;
 
@@ -60,7 +60,7 @@ export class FacetQueryController {
       builder.addFieldNotEqualExpression(<string>this.facet.options.field, _.map(excluded, (value: FacetValue) => value.value));
     }
     if (Utils.isNonEmptyString(this.facet.options.additionalFilter)) {
-      builder.add(this.facet.options.additionalFilter);
+      builder.add(this.facet.options.additionalFilter as string);
     }
     return builder.build();
   }
@@ -106,7 +106,7 @@ export class FacetQueryController {
     // For search, we want to retrieve the exact values we requested, and not additional ones
     params.completeFacetWithStandardValues = false;
     return new Promise((resolve, reject) => {
-      const onResult = (fieldValues?: IIndexFieldValue[]) => {
+      const onResult = (fieldValues: IIndexFieldValue[]) => {
         const newLength = fieldValues.length;
         fieldValues = this.checkForFacetSearchValuesToRemove(fieldValues, params.valueToSearch);
         if (FacetUtils.needAnotherFacetSearch(fieldValues.length, newLength, oldLength, 5)) {
@@ -184,13 +184,19 @@ export class FacetQueryController {
     // otherwise take only the selected value
     if (this.facet.options.allowedValues != undefined) {
       return this.facet.options.allowedValues;
-    } else if (this.facet.options.customSort != undefined) {
-      // If there is a custom sort, we still need to add selectedValues to the group by
-      // Filter out duplicates with a lower case comparison on the value
-      return this.getUnionWithCustomSortLowercase(this.facet.options.customSort, this.getAllowedValuesFromSelected());
-    } else {
-      return _.map(this.getAllowedValuesFromSelected(), (facetValue: FacetValue) => facetValue.value);
     }
+
+    const allowedValuesFromSelected = this.getAllowedValuesFromSelected();
+
+    if (!allowedValuesFromSelected) {
+      return [];
+    }
+
+    if (this.facet.options.customSort != undefined) {
+      return this.getUnionWithCustomSortLowercase(this.facet.options.customSort, allowedValuesFromSelected);
+    }
+
+    return _.map(allowedValuesFromSelected, (facetValue: FacetValue) => facetValue.value);
   }
 
   protected createBasicGroupByRequest(allowedValues?: string[], addComputedField: boolean = true): IGroupByRequest {
@@ -319,7 +325,7 @@ export class FacetQueryController {
       .value();
 
     if (_.keys(withoutEmptyValues).length == 0) {
-      mergeWith = undefined;
+      return undefined;
     }
 
     return mergeWith;
@@ -344,9 +350,12 @@ export class FacetQueryController {
     // We need to filter values client side the index will completeWithStandardValues
     // Replace the wildcard (*) for a regex match (.*)
     // Also replace the (?) with "any character once" since it is also supported by the index
-    return _.some(this.facet.options.allowedValues, allowedValue => {
-      const regex = new RegExp(`^${allowedValue.replace(/\*/g, '.*').replace(/\?/g, '.')}$`, 'gi');
-      return regex.test(value);
-    });
+    if (this.facet.options.allowedValues) {
+      return _.some(this.facet.options.allowedValues, allowedValue => {
+        const regex = new RegExp(`^${allowedValue.replace(/\*/g, '.*').replace(/\?/g, '.')}$`, 'gi');
+        return regex.test(value);
+      });
+    }
+    return true;
   }
 }

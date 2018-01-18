@@ -15,12 +15,9 @@ export interface IUrlNormalizedParts {
 }
 
 export class UrlUtils {
-  public static getUrlParameter(name: string): string {
-    return (
-      decodeURIComponent(
-        (new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search) || [, ''])[1].replace(/\+/g, '%20')
-      ) || null
-    );
+  public static getUrlParameter(name: string): string | null {
+    const regexp = new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search) || [''];
+    return decodeURIComponent(regexp[1].replace(/\+/g, '%20'));
   }
 
   public static merge(endpointParameters: IEndpointCallParameters, ...parts: IUrlNormalize[]) {

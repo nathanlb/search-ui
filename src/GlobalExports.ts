@@ -8,12 +8,12 @@ export interface IExportedGlobally {
 }
 
 export function exportGlobally(toExportGlobally: IExportedGlobally) {
-  if (window['Coveo'] == undefined) {
-    window['Coveo'] = {};
+  if (window.Coveo == undefined) {
+    window.Coveo = {};
   }
   _.each(_.keys(toExportGlobally), (key: string) => {
-    if (window['Coveo'][key] == null) {
-      window['Coveo'][key] = toExportGlobally[key];
+    if (window.Coveo[key] == null) {
+      window.Coveo[key] = toExportGlobally[key];
     }
   });
 }
@@ -22,7 +22,7 @@ export function lazyExport(component: IComponentDefinition, promiseResolve: Func
   if (component.doExport) {
     component.doExport();
   } else {
-    new Logger(this).error(`Component ${component} has no export function !`);
+    new Logger(window).error(`Component ${component} has no export function !`);
   }
   Initialization.registerAutoCreateComponent(component);
   promiseResolve(component);

@@ -146,4 +146,6 @@ export interface IQueryResult {
   orphan?: boolean;
 
   fields?: { [name: string]: any };
+
+  [anyAdditionalProp: string]: any;
 }

@@ -1,6 +1,8 @@
 export class ColorUtils {
-  static hsvToRgb(h, s, v) {
-    var r, g, b;
+  static hsvToRgb(h: number, s: number, v: number) {
+    var r = 0,
+      g = 0,
+      b = 0;
 
     var i = Math.floor(h * 6);
     var f = h * 6 - i;
@@ -32,12 +34,12 @@ export class ColorUtils {
     return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
   }
 
-  static rgbToHsv(r, g, b) {
+  static rgbToHsv(r: number, g: number, b: number) {
     (r = r / 255), (g = g / 255), (b = b / 255);
     var max = Math.max(r, g, b),
       min = Math.min(r, g, b);
-    var h,
-      s,
+    var h = 0,
+      s = 0,
       v = max;
 
     var d = max - min;

@@ -76,8 +76,14 @@ export class PopupUtils {
 
   private static finalAdjustement(popUpOffSet: IOffset, popUpPosition: IOffset, popUp: HTMLElement, desiredPosition: IPopupPosition) {
     let position = $$(popUp).position();
-    popUp.style.top = position.top + desiredPosition.verticalOffset - (popUpOffSet.top - popUpPosition.top) + 'px';
-    popUp.style.left = position.left + desiredPosition.horizontalOffset - (popUpOffSet.left - popUpPosition.left) + 'px';
+
+    if (desiredPosition.verticalOffset) {
+      popUp.style.top = position.top + desiredPosition.verticalOffset - (popUpOffSet.top - popUpPosition.top) + 'px';
+    }
+
+    if (desiredPosition.horizontalOffset) {
+      popUp.style.left = position.left + desiredPosition.horizontalOffset - (popUpOffSet.left - popUpPosition.left) + 'px';
+    }
   }
 
   private static basicVerticalAlignment(popUpPosition: IOffset, popUp: HTMLElement, nextTo: HTMLElement, desiredPosition: IPopupPosition) {
@@ -126,7 +132,7 @@ export class PopupUtils {
     }
   }
 
-  private static alignInsideBoundary(oldPosition: IPopupPosition, checkBoundary) {
+  private static alignInsideBoundary(oldPosition: IPopupPosition, checkBoundary: any) {
     let newDesiredPosition = oldPosition;
     if (checkBoundary.horizontal == 'left') {
       newDesiredPosition.horizontal = PopupHorizontalAlignment.RIGHT;

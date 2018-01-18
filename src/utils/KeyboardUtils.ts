@@ -22,7 +22,7 @@ export enum KEYBOARD {
 }
 
 export class KeyboardUtils {
-  static keysEqual(key, code) {
+  static keysEqual(key: KeyboardEvent, code: number) {
     if (!Utils.isNullOrUndefined(key.keyCode)) {
       return key.keyCode == code;
     } else if (!Utils.isNullOrUndefined(key.which)) {

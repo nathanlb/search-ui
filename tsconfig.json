@@ -8,7 +8,9 @@
     "sourceMap": true,
     "forceConsistentCasingInFileNames": true,
     "noUnusedLocals": true,
+    "strict": true,
     "typeRoots": ["lib", "node_modules/@types"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/Eager.ts", "src/SwapVar.ts", "src/Lazy.ts"]
 }

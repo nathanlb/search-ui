@@ -63,25 +63,27 @@ export class HashUtils {
     }
   }
 
-  private static getRawValue(key: string, toParse: string): string {
+  private static getRawValue(key: string, toParse: string): string | undefined {
     Assert.exists(key);
     Assert.exists(toParse);
     Assert.check(toParse.indexOf('#') == 0 || toParse == '');
 
     const toParseArray = toParse.substr(1).split('&');
-    let paramPos = 0;
+    let paramPos: number | undefined = 0;
     let loop = true;
-    let paramValue: string = undefined;
+    let paramValue: string | undefined = undefined;
     while (loop) {
-      const paramValuePair = toParseArray[paramPos].split('=');
-      if (paramValuePair[0] == key) {
-        loop = false;
-        paramValue = paramValuePair[1];
-      } else {
-        paramPos++;
-        if (paramPos >= toParseArray.length) {
-          paramPos = undefined;
+      if (paramPos) {
+        const paramValuePair = toParseArray[paramPos].split('=');
+        if (paramValuePair[0] == key) {
           loop = false;
+          paramValue = paramValuePair[1];
+        } else {
+          paramPos++;
+          if (paramPos >= toParseArray.length) {
+            paramPos = undefined;
+            loop = false;
+          }
         }
       }
     }

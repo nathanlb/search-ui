@@ -10,7 +10,7 @@ import FacetModuleDefinition = require('./Facet');
 import { l } from '../../strings/Strings';
 
 export class FacetUtils {
-  static getRegexToUseForFacetSearch(value: string, ignoreAccent: boolean) {
+  static getRegexToUseForFacetSearch(value: string, ignoreAccent?: boolean) {
     return new RegExp(StringUtils.stringToRegex(value, ignoreAccent), 'i');
   }
 

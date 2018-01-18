@@ -41,15 +41,16 @@ export class Dom {
    * the latter of which will automatically get replaced to dash-case.
    * @param innerHTML The contents of the new HTMLElement, either in string form or as another HTMLElement
    */
-  static createElement(type: string, props?: Object, ...children: Array<string | HTMLElement | Dom>): HTMLElement {
+  static createElement(type: string, props?: Record<string, string>, ...children: Array<string | HTMLElement | Dom>): HTMLElement {
     const elem: HTMLElement = document.createElement(type);
-
-    for (const key in props) {
-      if (key === 'className') {
-        elem.className = props['className'];
-      } else {
-        const attr = key.indexOf('-') !== -1 ? key : Utils.toDashCase(key);
-        elem.setAttribute(attr, props[key]);
+    if (props) {
+      for (const key in props) {
+        if (key === 'className') {
+          elem.className = props['className'];
+        } else {
+          const attr = key.indexOf('-') !== -1 ? key : Utils.toDashCase(key);
+          elem.setAttribute(attr, props[key]);
+        }
       }
     }
 
@@ -81,10 +82,8 @@ export class Dom {
    * @returns {string}
    */
   public css(property: string): string {
-    if (this.el.style[property]) {
-      return this.el.style[property];
-    }
-    return window.getComputedStyle(this.el).getPropertyValue(property);
+    const propertyValue = (<any>this.el.style)[property];
+    return propertyValue ? propertyValue : window.getComputedStyle(this.el).getPropertyValue(property);
   }
 
   /**
@@ -92,15 +91,16 @@ export class Dom {
    * @param txt Optional. If given, this will set the text content of the element. If not, will return the text content.
    * @returns {string}
    */
-  public text(txt?: string): string {
+  public text(txt?: string): string | null {
     if (Utils.isUndefined(txt)) {
       return this.el.innerText || this.el.textContent;
     } else {
       if (this.el.innerText != undefined) {
-        this.el.innerText = txt;
+        this.el.innerText = txt as string;
       } else if (this.el.textContent != undefined) {
-        this.el.textContent = txt;
+        this.el.textContent = txt as string;
       }
+      return null;
     }
   }
 
@@ -176,7 +176,7 @@ export class Dom {
    * Returns the value of the specified attribute.
    * @param name The name of the attribute
    */
-  public getAttribute(name: string): string {
+  public getAttribute(name: string): string | null {
     return this.el.getAttribute(name);
   }
 
@@ -228,7 +228,7 @@ export class Dom {
    * Stops at the body of the document
    * @param className A CSS classname
    */
-  public closest(className: string): HTMLElement {
+  public closest(className: string): HTMLElement | undefined {
     return this.traverseAncestorForClass(this.el, className);
   }
 
@@ -238,7 +238,7 @@ export class Dom {
    * Stops at the body of the document
    * @returns {any}
    */
-  public parent(className: string): HTMLElement {
+  public parent(className: string): HTMLElement | undefined {
     if (this.el.parentElement == undefined) {
       return undefined;
     }
@@ -274,17 +274,20 @@ export class Dom {
    * Return all siblings
    * @returns {HTMLElement[]}
    */
-  public siblings(selector: string): HTMLElement[] {
-    const sibs = [];
-    let currentElement = <HTMLElement>this.el.parentNode.firstChild;
-    for (; currentElement; currentElement = <HTMLElement>currentElement.nextSibling) {
-      if (currentElement != this.el) {
-        if (this.matches(currentElement, selector) || !selector) {
-          sibs.push(currentElement);
+  public siblings(selector: string): HTMLElement[] | null {
+    if (this.el.parentNode) {
+      const sibs = [];
+      let currentElement = <HTMLElement>this.el.parentNode.firstChild;
+      for (; currentElement; currentElement = <HTMLElement>currentElement.nextSibling) {
+        if (currentElement != this.el) {
+          if (this.matches(currentElement, selector) || !selector) {
+            sibs.push(currentElement);
+          }
         }
       }
+      return sibs;
     }
-    return sibs;
+    return null;
   }
 
   private matches(element: HTMLElement, selector: string) {
@@ -324,7 +327,7 @@ export class Dom {
    * @param id ID of the element to find
    * @returns {HTMLElement}
    */
-  public findId(id: string): HTMLElement {
+  public findId(id: string): HTMLElement | null {
     return document.getElementById(id);
   }
 
@@ -467,12 +470,13 @@ export class Dom {
           eventHandle(e, e.detail);
         };
         Dom.handlers.push({
-          eventHandle: eventHandle,
-          fn: fn
+          eventHandle,
+          fn: <EventListener>fn
         });
-        this.el.addEventListener(modifiedType, fn, false);
-      } else if (this.el['on']) {
-        this.el['on']('on' + modifiedType, eventHandle);
+        this.el.addEventListener(modifiedType, <EventListener>fn, false);
+      } else {
+        const on = (<any>this.el)['on'];
+        on('on' + modifiedType, eventHandle);
       }
     }
   }
@@ -529,8 +533,11 @@ export class Dom {
           this.el.removeEventListener(modifiedType, found.fn, false);
           Dom.handlers.splice(idx, 1);
         }
-      } else if (this.el['off']) {
-        this.el['off']('on' + modifiedType, eventHandle);
+      } else {
+        const offFunction = (<any>this.el)['off'];
+        if (offFunction) {
+          offFunction('on' + modifiedType, eventHandle);
+        }
       }
     }
   }
@@ -698,7 +705,7 @@ export class Dom {
     return event;
   }
 
-  private traverseAncestorForClass(current = this.el, className: string): HTMLElement {
+  private traverseAncestorForClass(current = this.el, className: string): HTMLElement | undefined {
     if (className.indexOf('.') == 0) {
       className = className.substr(1);
     }

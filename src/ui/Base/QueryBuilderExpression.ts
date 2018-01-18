@@ -33,6 +33,7 @@ export interface IQueryBuilderExpression {
 }
 
 export class QueryBuilderExpression implements QueryBuilderExpression {
+  [key: string]: any;
   public static isEmpty(queryBuilderExpression: QueryBuilderExpression) {
     const allNonEmptyValues = _.chain(queryBuilderExpression)
       .values()

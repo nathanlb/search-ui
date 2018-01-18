@@ -40,7 +40,7 @@ export class StreamHighlightUtils {
     phrasesToHighlight: { [phrase: string]: { [originalTerm: string]: string[] } },
     options?: IStreamHighlightOptions
   ) {
-    const opts = new DefaultStreamHighlightOptions().merge(options);
+    const opts = { ...new DefaultStreamHighlightOptions(), ...options };
     const container = createStreamHTMLContainer(stream);
     const allElements = $$(container).findAll('*');
     if (allElements.length > 0) {
@@ -65,7 +65,7 @@ export class StreamHighlightUtils {
     phrasesToHighlight: { [phrase: string]: { [originalTerm: string]: string[] } },
     options?: IStreamHighlightOptions
   ) {
-    const opts = new DefaultStreamHighlightOptions().merge(options);
+    const opts = { ...new DefaultStreamHighlightOptions(), ...options };
     return HighlightUtils.highlightString(
       stream,
       getRestHighlightsForAllTerms(stream, termsToHighlight, phrasesToHighlight, opts),
@@ -81,7 +81,7 @@ export function getRestHighlightsForAllTerms(
   phrasesToHighlight: { [phrase: string]: { [originalTerm: string]: string[] } },
   opts: IStreamHighlightOptions
 ): IHighlight[] {
-  const indexes = [];
+  const indexes: IHighlight[][] = [];
   const sortedTerms = _.keys(termsToHighlight).sort(termsSorting);
   _.each(sortedTerms, (term: string) => {
     let termsToIterate = _.compact([term].concat(termsToHighlight[term]).sort(termsSorting));
@@ -127,8 +127,8 @@ export function getRestHighlightsForAllTerms(
       return highlight.offset;
     })
     .map(highlight => {
-      const keysFromTerms = _.keys(termsToHighlight);
-      const keysFromPhrases = _.keys(phrasesToHighlight);
+      const keysFromTerms: string[] = _.keys(termsToHighlight);
+      const keysFromPhrases: string[] = _.keys(phrasesToHighlight);
       const keys = keysFromTerms.concat(keysFromPhrases);
       const group = _.indexOf(keys, highlight.dataHighlightGroupTerm) + 1;
       return _.extend(highlight, { dataHighlightGroup: group });

@@ -8,6 +8,9 @@ import { SVGIcons } from './SVGIcons';
 import { load } from '../ui/Base/RegisteredNamedMethods';
 import { Logger } from '../misc/Logger';
 import { IComponentBindings } from '../ui/Base/ComponentBindings';
+
+declare const Coveo: any;
+
 export class DomUtils {
   static getPopUpCloseButton(captionForClose: string, captionForReminder: string): string {
     let container = document.createElement('span');

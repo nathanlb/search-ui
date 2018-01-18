@@ -4,16 +4,23 @@ import { IStringMap } from '../rest/GenericParam';
 
 const isCoveoFieldRegex = /^@[a-zA-Z0-9_\.]+$/;
 
+declare global {
+  interface Window {
+    Coveo: any;
+    __extends: (child: any, parent: any) => void;
+  }
+}
+
 export class Utils {
-  static isUndefined(obj: any): boolean {
+  static isUndefined(obj: any): obj is undefined {
     return typeof obj == 'undefined';
   }
 
-  static isNull(obj: any): boolean {
+  static isNull(obj: any): obj is null {
     return obj === null;
   }
 
-  static isNullOrUndefined(obj: any): boolean {
+  static isNullOrUndefined(obj: any): obj is null | undefined {
     return Utils.isUndefined(obj) || Utils.isNull(obj);
   }
 
@@ -21,7 +28,7 @@ export class Utils {
     return !Utils.isNullOrUndefined(obj);
   }
 
-  static toNotNullString(str: string): string {
+  static toNotNullString(str: string | null | undefined): string {
     return _.isString(str) ? str : '';
   }
 
@@ -33,7 +40,7 @@ export class Utils {
     return Utils.isNullOrUndefined(str) || !Utils.isNonEmptyString(str);
   }
 
-  static isNonEmptyString(str: string): boolean {
+  static isNonEmptyString(str: string | undefined): boolean {
     return _.isString(str) && str !== '';
   }
 
@@ -53,16 +60,11 @@ export class Utils {
     return !Utils.isNonEmptyArray(obj);
   }
 
-  static isHtmlElement(obj: any): boolean {
-    if (window['HTMLElement'] != undefined) {
-      return obj instanceof HTMLElement;
-    } else {
-      // IE 8 FIX
-      return obj && obj.nodeType && obj.nodeType == 1;
-    }
+  static isHtmlElement(obj: any): obj is HTMLElement {
+    return obj instanceof HTMLElement;
   }
 
-  static parseIntIfNotUndefined(str: string): number {
+  static parseIntIfNotUndefined(str: string): number | undefined {
     if (Utils.isNonEmptyString(str)) {
       return parseInt(str, 10);
     } else {
@@ -70,7 +72,7 @@ export class Utils {
     }
   }
 
-  static parseFloatIfNotUndefined(str: string): number {
+  static parseFloatIfNotUndefined(str: string): number | undefined {
     let a: any = 't';
     a instanceof HTMLDocument;
     if (Utils.isNonEmptyString(str)) {
@@ -84,7 +86,7 @@ export class Utils {
     return Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
   }
 
-  static parseBooleanIfNotUndefined(str: string): boolean {
+  static parseBooleanIfNotUndefined(str: string): boolean | undefined {
     if (Utils.isNonEmptyString(str)) {
       switch (str.toLowerCase()) {
         case 'true':
@@ -105,7 +107,7 @@ export class Utils {
 
   static trim(value: string): string {
     if (value == null) {
-      return null;
+      return value;
     }
     return value.replace(/^\s+|\s+$/g, '');
   }
@@ -177,7 +179,7 @@ export class Utils {
     return ret;
   }
 
-  static getCaseInsensitiveProperty(object: {}, name: string): any {
+  static getCaseInsensitiveProperty(object: any, name: string): any {
     // First try using a fast case-sensitive lookup
     let value = object[name];
 
@@ -196,7 +198,7 @@ export class Utils {
     return value;
   }
 
-  static getFieldValue(result: IQueryResult, name: string): any {
+  static getFieldValue(result: IQueryResult, name: string | null): any {
     // Be as forgiving as possible about the field name, since we expect
     // user provided values.
     if (name == null) {
@@ -217,11 +219,13 @@ export class Utils {
     // Handle namespace field values of the form sf.Foo.Bar
     let parts = name.split('.').reverse();
     let obj = result.raw;
-    while (parts.length > 1) {
-      obj = Utils.getCaseInsensitiveProperty(obj, parts.pop());
+    let pop = parts.pop();
+    while (pop) {
+      obj = Utils.getCaseInsensitiveProperty(obj, pop);
       if (Utils.isUndefined(obj)) {
         return undefined;
       }
+      pop = parts.pop();
     }
     let value = Utils.getCaseInsensitiveProperty(obj, parts[0]);
     // If still nothing, look at the root of the result
@@ -231,9 +235,9 @@ export class Utils {
     return value;
   }
 
-  static throttle(func, wait, options: { leading?: boolean; trailing?: boolean } = {}, context?, args?) {
-    let result;
-    let timeout: number = null;
+  static throttle(func: any, wait: any, options: { leading?: boolean; trailing?: boolean } = {}, context?: any, args?: any) {
+    let result: any;
+    let timeout: number | null = null;
     let previous = 0;
     let later = function() {
       previous = options.leading === false ? 0 : new Date().getTime();
@@ -260,12 +264,12 @@ export class Utils {
     };
   }
 
-  static extendDeep(target, src): {} {
+  static extendDeep(target: any, src: any): {} {
     if (!target) {
       target = {};
     }
     let isArray = _.isArray(src);
-    let toReturn = (isArray && []) || {};
+    let toReturn: any = (isArray && []) || {};
     if (isArray) {
       target = target || [];
       toReturn = toReturn['concat'](target);
@@ -301,7 +305,7 @@ export class Utils {
     return toReturn;
   }
 
-  static getQueryStringValue(key, queryString = window.location.search) {
+  static getQueryStringValue(key: any, queryString = window.location.search) {
     return queryString.replace(new RegExp('^(?:.*[&\\?]' + key.replace(/[\.\+\*]/g, '\\$&') + '(?:\\=([^&]*))?)?.*$', 'i'), '$1');
   }
 
@@ -311,8 +315,8 @@ export class Utils {
   }
 
   static debounce(func: Function, wait: number) {
-    let timeout: number;
-    let stackTraceTimeout: number;
+    let timeout: number | null;
+    let stackTraceTimeout: number | null;
     return function(...args: any[]) {
       if (timeout == null) {
         timeout = setTimeout(() => {
@@ -369,7 +373,7 @@ export class Utils {
     }
   }
 
-  static copyObject<T>(target: T, src: T) {
+  static copyObject<T>(target: any, src: any) {
     _.each(_.keys(src), key => {
       if (typeof src[key] !== 'object' || !src[key]) {
         target[key] = src[key];
@@ -381,7 +385,7 @@ export class Utils {
     });
   }
 
-  static copyObjectAttributes<T>(target: T, src: T, attributes: string[]) {
+  static copyObjectAttributes<T>(target: any, src: any, attributes: string[]) {
     _.each(_.keys(src), key => {
       if (_.contains(attributes, key)) {
         if (typeof src[key] !== 'object' || !src[key]) {

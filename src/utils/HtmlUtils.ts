@@ -40,8 +40,8 @@ export interface IImageUtilsOptions {
 
 export class HTMLUtils {
   static buildAttributeString(options: any): string {
-    var ret = [];
-    _.each(options, (val: any, key?: string, obj?) => {
+    var ret: string[] = [];
+    _.each(options, (val: any, key?: string, obj?: any) => {
       if (val != undefined) {
         ret.push(key + '=' + JSON.stringify(val.toString()));
       }

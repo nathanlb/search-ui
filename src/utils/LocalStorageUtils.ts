@@ -10,7 +10,7 @@ export class LocalStorageUtils<T> {
     } catch (error) {}
   }
 
-  public load(): T {
+  public load(): T | null {
     try {
       if (localStorage == null) {
         return null;
@@ -28,9 +28,11 @@ export class LocalStorageUtils<T> {
         if (key == undefined) {
           localStorage.removeItem(this.getLocalStorageKey());
         } else {
-          var oldObj = this.load();
-          delete oldObj[key];
-          this.save(oldObj);
+          var oldObj: any = this.load();
+          if (oldObj) {
+            delete oldObj[key];
+            this.save(oldObj);
+          }
         }
       }
     } catch (error) {}
