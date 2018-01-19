@@ -13,7 +13,7 @@ export class FacetRangeQueryController extends FacetQueryController {
   }
 
   protected createBasicGroupByRequest(allowedValues?: string[], addComputedField: boolean = true) {
-    var groupByQuery = super.createBasicGroupByRequest(null, addComputedField);
+    var groupByQuery = super.createBasicGroupByRequest(undefined, addComputedField);
     groupByQuery.allowedValues = undefined;
     if (Utils.isNonEmptyArray(this.facet.options.ranges)) {
       groupByQuery = this.buildGroupByQueryForPredefinedRanges(groupByQuery);
@@ -23,7 +23,7 @@ export class FacetRangeQueryController extends FacetQueryController {
     return groupByQuery;
   }
 
-  protected createGroupByAllowedValues(): string[] {
+  protected createGroupByAllowedValues(): string[] | undefined {
     return undefined;
   }
 
@@ -34,7 +34,12 @@ export class FacetRangeQueryController extends FacetQueryController {
 
   private buildGroupByQueryForPredefinedRanges(groupByQuery: IGroupByRequest) {
     groupByQuery.rangeValues = this.facet.options.ranges;
-    groupByQuery.maximumNumberOfValues = this.facet.options.ranges.length;
+    if (this.facet.options.ranges) {
+      groupByQuery.maximumNumberOfValues = this.facet.options.ranges.length;
+    } else {
+      groupByQuery.maximumNumberOfValues = 5;
+    }
+
     return groupByQuery;
   }
 }

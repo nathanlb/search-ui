@@ -5,7 +5,7 @@ import { IQuery } from '../rest/Query';
 import { ISearchEndpoint, IEndpointCallOptions } from '../rest/SearchEndpointInterface';
 import { SearchEndpoint } from '../rest/SearchEndpoint';
 import { LocalStorageUtils } from '../utils/LocalStorageUtils';
-import { ISearchInterfaceOptions } from '../ui/SearchInterface/SearchInterface';
+import { ISearchInterfaceOptions, SearchInterface } from '../ui/SearchInterface/SearchInterface';
 import { Assert } from '../misc/Assert';
 import { SearchEndpointWithDefaultCallOptions } from '../rest/SearchEndpointWithDefaultCallOptions';
 import {
@@ -30,6 +30,8 @@ import { ModalBox } from '../ExternalModulesShim';
 import { history } from 'coveo.analytics';
 import * as _ from 'underscore';
 import { UrlUtils } from '../utils/UrlUtils';
+import { IAnalyticsClient } from '../ui/Analytics/AnalyticsClient';
+import { Component } from '../ui/Base/Component';
 
 /**
  * Possible options when performing a query with the query controller
@@ -83,6 +85,8 @@ class DefaultQueryOptions implements IQueryOptions {
   cancel = false;
   logInActionsHistory = false;
   shouldRedirectStandaloneSearchbox = true;
+  origin = undefined;
+  isFirstQuery = false;
 }
 
 /**
@@ -95,7 +99,7 @@ export class QueryController extends RootComponent {
   static ID = 'QueryController';
   public historyStore: CoveoAnalytics.HistoryStore;
 
-  private currentPendingQuery: Promise<IQueryResults>;
+  private currentPendingQuery: Promise<IQueryResults> | null;
   private lastQueryBuilder: QueryBuilder;
   private lastQueryHash: string;
   private lastQuery: IQuery;
@@ -114,7 +118,12 @@ export class QueryController extends RootComponent {
    * @param element
    * @param options
    */
-  constructor(element: HTMLElement, public options: ISearchInterfaceOptions, public usageAnalytics, public searchInterface) {
+  constructor(
+    element: HTMLElement,
+    public options: ISearchInterfaceOptions,
+    public usageAnalytics: IAnalyticsClient,
+    public searchInterface: SearchInterface
+  ) {
     super(element, QueryController.ID);
     Assert.exists(element);
     Assert.exists(options);
@@ -167,8 +176,8 @@ export class QueryController extends RootComponent {
    * @param options
    * @returns {Promise<IQueryResults>}
    */
-  public executeQuery(options?: IQueryOptions): Promise<IQueryResults> {
-    options = <IQueryOptions>_.extend(new DefaultQueryOptions(), options);
+  public async executeQuery(options: IQueryOptions = new DefaultQueryOptions()): Promise<IQueryResults> | null {
+    const nonNullOptions = { ...new DefaultQueryOptions(), ...options } as DefaultQueryOptions;
 
     if (options.closeModalBox) {
       ModalBox.close(true);
@@ -178,9 +187,7 @@ export class QueryController extends RootComponent {
 
     this.cancelAnyCurrentPendingQuery();
 
-    if (options.beforeExecuteQuery != null) {
-      options.beforeExecuteQuery();
-    }
+    nonNullOptions.beforeExecuteQuery ? nonNullOptions.beforeExecuteQuery() : null;
 
     if (!options.ignoreWarningSearchEvent) {
       this.usageAnalytics.warnAboutSearchEvent();
@@ -188,132 +195,106 @@ export class QueryController extends RootComponent {
 
     this.showExecutingQueryAnimation();
 
-    let dataToSendOnNewQuery: INewQueryEventArgs = {
-      searchAsYouType: options.searchAsYouType,
-      cancel: options.cancel,
-      origin: options.origin,
-      shouldRedirectStandaloneSearchbox: options.shouldRedirectStandaloneSearchbox
-    };
+    const newQueryEventResult = this.newQueryEvent(nonNullOptions);
 
-    this.newQueryEvent(dataToSendOnNewQuery);
-
-    if (dataToSendOnNewQuery.cancel) {
+    if (newQueryEventResult.cancel) {
       this.cancelQuery();
-      return;
+      return null;
     }
 
-    let queryBuilder = this.createQueryBuilder(options);
+    const queryBuilder = this.createQueryBuilder(nonNullOptions);
 
     // The query was canceled
     if (!queryBuilder) {
+      return null;
+    }
+
+    const query = queryBuilder.build();
+    if (options.logInActionsHistory) {
+      this.logQueryInActionsHistory(query, nonNullOptions.isFirstQuery);
+    }
+
+    const endpointToUse = this.getEndpoint();
+
+    const promise = (this.currentPendingQuery = endpointToUse.search(query));
+
+    const queryResults = await promise;
+    Assert.exists(queryResults);
+
+    const isFirstQuery = this.firstQuery;
+    this.firstQuery = false;
+
+    // If our promise is no longer the current one, then the query
+    // has been cancel. We should do nothing here.
+    if (promise !== this.currentPendingQuery) {
+      return null;
+    }
+
+    this.logger.debug('Query results received', query, queryResults);
+    const enableHistory = this.searchInterface && this.searchInterface.options && this.searchInterface.options.enableHistory;
+
+    if ((!isFirstQuery || enableHistory) && this.keepLastSearchUid(query, queryResults)) {
+      queryResults.searchUid = this.getLastSearchUid();
+      queryResults._reusedSearchUid = true;
+      QueryUtils.setPropertyOnResults(queryResults, 'queryUid', this.getLastSearchUid());
+    } else {
+      this.lastQueryHash = this.queryHash(query, queryResults);
+      this.lastSearchUid = queryResults.searchUid;
+    }
+
+    this.lastQuery = query;
+    this.lastQueryResults = queryResults;
+    this.currentError = null;
+
+    this.preprocessResultsEvent(query, queryResults, queryBuilder, nonNullOptions);
+
+    if (queryResults.results.length == 0) {
+      const noResultEvent = this.noResultEvent(query, queryResults, queryBuilder, nonNullOptions);
+      if (noResultEvent.retryTheQuery) {
+        // When retrying the query, we must forward the results to the deferred we
+        // initially returned, in case someone is listening on it.
+        return this.executeQuery();
+      }
+    }
+
+    this.lastQueryBuilder = queryBuilder;
+    this.currentPendingQuery = null;
+    const querySuccessResult = this.querySuccessEvent(query, queryResults, queryBuilder, nonNullOptions);
+
+    Defer.defer(() => {
+      this.deferredQuerySuccessEvent(querySuccessResult);
+      this.hideExecutingQueryAnimation();
+    });
+
+    return queryResults;
+    //}
+    //})
+    //   .catch((error?: any) => {
+    // If our deferred is no longer the current one, then the query
+    // has been cancel. We should do nothing here.
+    if (promise !== this.currentPendingQuery) {
       return;
     }
 
-    let query = queryBuilder.build();
-    if (options.logInActionsHistory) {
-      this.logQueryInActionsHistory(query, options.isFirstQuery);
-    }
+    this.logger.error('Query triggered an error', query, error);
 
-    let endpointToUse = this.getEndpoint();
+    // this.currentPendingQuery.reject(error);
+    this.currentPendingQuery = undefined;
+    let dataToSendOnError: IQueryErrorEventArgs = {
+      queryBuilder: queryBuilder,
+      endpoint: endpointToUse,
+      query: query,
+      error: error,
+      searchAsYouType: options.searchAsYouType
+    };
 
-    let promise = (this.currentPendingQuery = endpointToUse.search(query));
-    promise
-      .then(queryResults => {
-        Assert.exists(queryResults);
-        let firstQuery = this.firstQuery;
-        if (this.firstQuery) {
-          this.firstQuery = false;
-        }
-        // If our promise is no longer the current one, then the query
-        // has been cancel. We should do nothing here.
-        if (promise !== this.currentPendingQuery) {
-          return;
-        }
+    this.lastQuery = query;
+    this.lastQueryResults = null;
+    this.currentError = error;
+    this.queryError(dataToSendOnError);
 
-        this.logger.debug('Query results received', query, queryResults);
-        let enableHistory = this.searchInterface && this.searchInterface.options && this.searchInterface.options.enableHistory;
-
-        if ((!firstQuery || enableHistory) && this.keepLastSearchUid(query, queryResults)) {
-          queryResults.searchUid = this.getLastSearchUid();
-          queryResults._reusedSearchUid = true;
-          QueryUtils.setPropertyOnResults(queryResults, 'queryUid', this.getLastSearchUid());
-        } else {
-          this.lastQueryHash = this.queryHash(query, queryResults);
-          this.lastSearchUid = queryResults.searchUid;
-        }
-
-        this.lastQuery = query;
-        this.lastQueryResults = queryResults;
-        this.currentError = null;
-
-        let dataToSendOnPreprocessResult: IPreprocessResultsEventArgs = {
-          queryBuilder: queryBuilder,
-          query: query,
-          results: queryResults,
-          searchAsYouType: options.searchAsYouType
-        };
-        this.preprocessResultsEvent(dataToSendOnPreprocessResult);
-
-        let dataToSendOnNoResult: INoResultsEventArgs = {
-          queryBuilder: queryBuilder,
-          query: query,
-          results: queryResults,
-          searchAsYouType: options.searchAsYouType,
-          retryTheQuery: false
-        };
-        if (queryResults.results.length == 0) {
-          this.noResultEvent(dataToSendOnNoResult);
-        }
-
-        if (dataToSendOnNoResult.retryTheQuery) {
-          // When retrying the query, we must forward the results to the deferred we
-          // initially returned, in case someone is listening on it.
-          return this.executeQuery();
-        } else {
-          this.lastQueryBuilder = queryBuilder;
-          this.currentPendingQuery = undefined;
-
-          let dataToSendOnSuccess: IQuerySuccessEventArgs = {
-            queryBuilder: queryBuilder,
-            query: query,
-            results: queryResults,
-            searchAsYouType: options.searchAsYouType
-          };
-          this.querySuccessEvent(dataToSendOnSuccess);
-
-          Defer.defer(() => {
-            this.deferredQuerySuccessEvent(dataToSendOnSuccess);
-            this.hideExecutingQueryAnimation();
-          });
-          return queryResults;
-        }
-      })
-      .catch((error?: any) => {
-        // If our deferred is no longer the current one, then the query
-        // has been cancel. We should do nothing here.
-        if (promise !== this.currentPendingQuery) {
-          return;
-        }
-
-        this.logger.error('Query triggered an error', query, error);
-
-        // this.currentPendingQuery.reject(error);
-        this.currentPendingQuery = undefined;
-        let dataToSendOnError: IQueryErrorEventArgs = {
-          queryBuilder: queryBuilder,
-          endpoint: endpointToUse,
-          query: query,
-          error: error,
-          searchAsYouType: options.searchAsYouType
-        };
-
-        this.lastQuery = query;
-        this.lastQueryResults = null;
-        this.currentError = error;
-        this.queryError(dataToSendOnError);
-
-        this.hideExecutingQueryAnimation();
-      });
+    this.hideExecutingQueryAnimation();
+    //});
 
     let dataToSendDuringQuery: IDuringQueryEventArgs = {
       queryBuilder: queryBuilder,
@@ -406,12 +387,12 @@ export class QueryController extends RootComponent {
     }
   }
 
-  public createQueryBuilder(options: IQueryOptions): QueryBuilder {
+  public createQueryBuilder(options: DefaultQueryOptions): QueryBuilder | null {
     Assert.exists(options);
 
     this.createdOneQueryBuilder = true;
 
-    let queryBuilder = new QueryBuilder();
+    const queryBuilder = new QueryBuilder();
 
     // Default values, components will probably override them if they exists
     queryBuilder.locale = <string>String['locale'];
@@ -421,14 +402,15 @@ export class QueryController extends RootComponent {
     // to allow someone to have a peep at the query builder after the first phase
     // and add some stuff depending on what was put in there. The facets are using
     // this mechanism to generate query overrides.
-    let dataToSendDuringBuildingQuery: IBuildingQueryEventArgs = {
+    const dataToSendDuringBuildingQuery: IBuildingQueryEventArgs = {
       queryBuilder: queryBuilder,
       searchAsYouType: options.searchAsYouType,
       cancel: options.cancel
     };
+
     this.buildingQueryEvent(dataToSendDuringBuildingQuery);
 
-    let dataToSendDuringDoneBuildingQuery: IDoneBuildingQueryEventArgs = {
+    const dataToSendDuringDoneBuildingQuery: IDoneBuildingQueryEventArgs = {
       queryBuilder: queryBuilder,
       searchAsYouType: options.searchAsYouType,
       cancel: options.cancel
@@ -437,10 +419,10 @@ export class QueryController extends RootComponent {
 
     if (dataToSendDuringBuildingQuery.cancel || dataToSendDuringDoneBuildingQuery.cancel) {
       this.cancelQuery();
-      return;
+      return null;
     }
 
-    let pipeline = this.getPipelineInUrl();
+    const pipeline = this.getPipelineInUrl();
     if (pipeline) {
       queryBuilder.pipeline = pipeline;
     }
@@ -503,7 +485,7 @@ export class QueryController extends RootComponent {
     if (Utils.exists(this.currentPendingQuery)) {
       this.logger.debug('Cancelling current pending query');
       Promise.reject('Cancelling current pending query');
-      this.currentPendingQuery = undefined;
+      this.currentPendingQuery = null;
       return true;
     }
     return false;
@@ -546,8 +528,51 @@ export class QueryController extends RootComponent {
     return args.options;
   }
 
-  private newQueryEvent(args) {
-    $$(this.element).trigger(QueryEvents.newQuery, args);
+  private newQueryEvent(options: DefaultQueryOptions) {
+    const dataToSendOnNewQuery: INewQueryEventArgs = {
+      searchAsYouType: options.searchAsYouType,
+      cancel: options.cancel,
+      origin: options.origin,
+      shouldRedirectStandaloneSearchbox: options.shouldRedirectStandaloneSearchbox
+    };
+
+    $$(this.element).trigger(QueryEvents.newQuery, dataToSendOnNewQuery);
+    return dataToSendOnNewQuery;
+  }
+
+  private preprocessResultsEvent(query: IQuery, queryResults: IQueryResults, queryBuilder: QueryBuilder, options: DefaultQueryOptions) {
+    const dataToSendOnPreprocessResult: IPreprocessResultsEventArgs = {
+      queryBuilder: queryBuilder,
+      query: query,
+      results: queryResults,
+      searchAsYouType: options.searchAsYouType
+    };
+    $$(this.element).trigger(QueryEvents.preprocessResults, dataToSendOnPreprocessResult);
+    return dataToSendOnPreprocessResult;
+  }
+
+  private noResultEvent(query: IQuery, queryResults: IQueryResults, queryBuilder: QueryBuilder, options: DefaultQueryOptions) {
+    const dataToSendOnNoResult: INoResultsEventArgs = {
+      queryBuilder: queryBuilder,
+      query: query,
+      results: queryResults,
+      searchAsYouType: options.searchAsYouType,
+      retryTheQuery: false
+    };
+    $$(this.element).trigger(QueryEvents.noResults, dataToSendOnNoResult);
+    return dataToSendOnNoResult;
+  }
+
+  private querySuccessEvent(query: IQuery, queryResults: IQueryResults, queryBuilder: QueryBuilder, options: DefaultQueryOptions) {
+    const dataToSendOnSuccess: IQuerySuccessEventArgs = {
+      queryBuilder: queryBuilder,
+      query: query,
+      results: queryResults,
+      searchAsYouType: options.searchAsYouType
+    };
+
+    $$(this.element).trigger(QueryEvents.querySuccess, dataToSendOnSuccess);
+    return dataToSendOnSuccess;
   }
 
   private buildingQueryEvent(args) {
@@ -562,28 +587,16 @@ export class QueryController extends RootComponent {
     $$(this.element).trigger(QueryEvents.duringQuery, args);
   }
 
-  private querySuccessEvent(args) {
-    $$(this.element).trigger(QueryEvents.querySuccess, args);
-  }
-
   private fetchMoreSuccessEvent(args) {
     $$(this.element).trigger(QueryEvents.fetchMoreSuccess, args);
   }
 
-  private deferredQuerySuccessEvent(args) {
+  private deferredQuerySuccessEvent(args: IQuerySuccessEventArgs) {
     $$(this.element).trigger(QueryEvents.deferredQuerySuccess, args);
   }
 
   private queryError(args) {
     $$(this.element).trigger(QueryEvents.queryError, args);
-  }
-
-  private preprocessResultsEvent(args) {
-    $$(this.element).trigger(QueryEvents.preprocessResults, args);
-  }
-
-  private noResultEvent(args) {
-    $$(this.element).trigger(QueryEvents.noResults, args);
   }
 
   public debugInfo() {

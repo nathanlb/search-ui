@@ -179,7 +179,7 @@ export class FacetQueryController {
     return this.facet.getEndpoint().search(query);
   }
 
-  protected createGroupByAllowedValues() {
+  protected createGroupByAllowedValues(): string[] | undefined {
     // if you want to keep displayed values next time, take all current values as allowed values
     // otherwise take only the selected value
     if (this.facet.options.allowedValues != undefined) {

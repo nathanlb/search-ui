@@ -7,7 +7,7 @@ export function customEventPolyfill() {
     return;
   }
 
-  let CustomEvent = (event, params) => {
+  let CustomEvent = (event: string, params: Record<string, any>) => {
     params = params || { bubbles: false, cancelable: false, detail: undefined };
     let customEvent = document.createEvent('CustomEvent');
     customEvent.initCustomEvent(event, params.bubbles, params.cancelable, params.detail);

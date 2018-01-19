@@ -1,16 +1,22 @@
+declare global {
+  interface Window {
+    Promise: typeof Promise;
+  }
+}
+
 /* istanbul ignore next */
 export function shim() {
-  const doShim = promiseInstance => {
+  const doShim = (promiseInstance: typeof Promise) => {
     if (typeof promiseInstance.prototype['finally'] != 'function') {
-      promiseInstance.prototype['finally'] = function finallyPolyfill(callback) {
-        let constructor = this.constructor;
+      promiseInstance.prototype['finally'] = function finallyPolyfill(callback: () => any) {
+        let constructor = this.constructor as typeof Promise;
         return this.then(
-          function(value) {
+          function(value: any) {
             return constructor.resolve(callback()).then(function() {
               return value;
             });
           },
-          function(reason) {
+          function(reason: any) {
             return constructor.resolve(callback()).then(function() {
               throw reason;
             });
@@ -19,7 +25,7 @@ export function shim() {
       };
     }
 
-    let rethrowError = self => {
+    let rethrowError = (self: Promise<any>) => {
       self.then(null, function(err) {
         setTimeout(function() {
           throw err;
@@ -28,7 +34,7 @@ export function shim() {
     };
 
     if (typeof promiseInstance.prototype['done'] !== 'function') {
-      promiseInstance.prototype['done'] = function(onFulfilled, onRejected) {
+      promiseInstance.prototype['done'] = function(onFulfilled: () => any, onRejected: () => any) {
         let self = arguments.length ? this.then.apply(this, arguments) : this;
         rethrowError(self);
         return this;
@@ -36,7 +42,7 @@ export function shim() {
     }
 
     if (typeof promiseInstance.prototype['fail'] !== 'function') {
-      promiseInstance.prototype['fail'] = function(onFulfilled, onRejected) {
+      promiseInstance.prototype['fail'] = function(onFulfilled: () => any, onRejected: () => any) {
         let self = arguments.length ? this.catch.apply(this, arguments) : this;
         rethrowError(self);
         return this;

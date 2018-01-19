@@ -28,7 +28,7 @@ export class HierarchicalFacetQueryController extends FacetQueryController {
             !_.contains(<any>_.map(params.alwaysExclude, toExclude => toExclude.toLowerCase()), v.facetValue.value.toLowerCase())
           );
         })
-        .first(this.facet.options.numberOfValuesInFacetSearch)
+        .first(this.facet.options.numberOfValuesInFacetSearch || 5)
         .value();
 
       const facetValues: IIndexFieldValue[] = _.map(match, (v: IValueHierarchy) => {

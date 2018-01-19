@@ -40,7 +40,7 @@ export class Utils {
     return Utils.isNullOrUndefined(str) || !Utils.isNonEmptyString(str);
   }
 
-  static isNonEmptyString(str: string | undefined): boolean {
+  static isNonEmptyString(str: string | undefined): str is string & boolean {
     return _.isString(str) && str !== '';
   }
 

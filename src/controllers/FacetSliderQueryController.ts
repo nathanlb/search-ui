@@ -14,7 +14,7 @@ import * as _ from 'underscore';
 export class FacetSliderQueryController {
   public graphGroupByQueriesIndex: number;
   private rangeValuesForGraphToUse: { start: any; end: any }[];
-  public lastGroupByRequestIndex: number;
+  public lastGroupByRequestIndex: number | undefined;
   public groupByRequestForFullRange: number;
 
   constructor(public facet: FacetSlider) {
@@ -139,16 +139,16 @@ export class FacetSliderQueryController {
     this.processQueryOverride(filter, basicGroupByRequestForGraph, queryBuilder);
 
     basicGroupByRequestForGraph.sortCriteria = 'nosort';
-    basicGroupByRequestForGraph.maximumNumberOfValues = this.facet.options.graph.steps;
+    basicGroupByRequestForGraph.maximumNumberOfValues = this.facet.options.graph ? this.facet.options.graph.steps : 5;
     queryBuilder.groupByRequests.push(basicGroupByRequestForGraph);
   }
 
   private putGroupByForSliderIntoQueryBuilder(queryBuilder: QueryBuilder) {
     this.lastGroupByRequestIndex = queryBuilder.groupByRequests.length;
 
-    let maximumNumberOfValues = 1;
+    let maximumNumberOfValues: number | undefined = 1;
     if (this.facet.hasAGraph()) {
-      maximumNumberOfValues = this.facet.options.graph.steps;
+      maximumNumberOfValues = this.facet.options.graph ? this.facet.options.graph.steps : 5;
     }
 
     let rangeValues = undefined;
@@ -213,7 +213,7 @@ export class FacetSliderQueryController {
       label: 'Slider'
     };
 
-    if (this.facet.options.graph.steps == undefined) {
+    if (this.facet.options.graph && this.facet.options.graph.steps == undefined) {
       this.facet.options.graph.steps = 10;
     }
     if (this.facet.options.dateField && isNaN(this.facet.options.start)) {
@@ -242,8 +242,9 @@ export class FacetSliderQueryController {
 
   private buildRange(basicRangeRequest: IRangeValue) {
     const start = this.facet.options.start;
-    const oneStep = (this.facet.options.end - this.facet.options.start) / this.facet.options.graph.steps;
-    return _.map(_.range(0, this.facet.options.graph.steps, 1), step => {
+    const numberOfSteps = this.facet.options.graph && this.facet.options.graph.steps ? this.facet.options.graph.steps : 1;
+    const oneStep = (this.facet.options.end - this.facet.options.start) / numberOfSteps;
+    return _.map(_.range(0, numberOfSteps, 1), step => {
       let newStart = start + step * oneStep;
       let newEnd = start + (step + 1) * oneStep;
       if (this.facet.options.dateField) {
@@ -294,13 +295,15 @@ export class FacetSliderQueryController {
 
   private getFilterDateFormat(rawValue: any) {
     if (rawValue) {
-      return this.getISOFormat(rawValue)
-        .replace('T', '@')
-        .replace('.000Z', '')
-        .replace(/-/g, '/');
-    } else {
-      return undefined;
+      const isoFormat = this.getISOFormat(rawValue);
+      if (isoFormat) {
+        return isoFormat
+          .replace('T', '@')
+          .replace('.000Z', '')
+          .replace(/-/g, '/');
+      }
     }
+    return undefined;
   }
 
   private getBrowserCompatibleFormat(value: string) {

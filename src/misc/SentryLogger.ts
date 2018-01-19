@@ -22,6 +22,9 @@ export class SentryLogger {
   }
 
   private handleError(message: string, filename?: string, lineno?: number, colno?: number, error?: Error) {
+    if (!filename || !error) {
+      return;
+    }
     // try not to log irrelevant errors ...
     if (!filename.toLowerCase().match(/coveo/) || this.windoh.location.host.toLowerCase().match(/localhost/)) {
       return;

@@ -1,7 +1,7 @@
 import * as _ from 'underscore';
 
 export class Defer {
-  private static functions = [];
+  private static functions: (() => void)[] = [];
 
   static defer(code: () => void) {
     Defer.functions.push(code);
