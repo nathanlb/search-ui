@@ -9,15 +9,14 @@ const production = process.env.NODE_ENV === 'production';
 const globalizePath = __dirname + '/lib/globalize/globalize.min.js';
 const analyzer = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
+console.log('IS PRODUCTION', production);
+
 let bail;
 let plugins = [];
 let additionalRules = [];
 
 if (analyze) {
   plugins.push(new analyzer());
-}
-if (minimize) {
-  plugins.push(new webpack.optimize.UglifyJsPlugin());
 }
 
 plugins.push(
@@ -26,7 +25,6 @@ plugins.push(
   })
 );
 
-plugins.push(new webpack.optimize.ModuleConcatenationPlugin());
 plugins.push(new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/));
 
 if (production) {
@@ -72,7 +70,9 @@ if (production) {
       {
         loader: 'style-loader',
         options: {
-          publicPath: '',
+          hmr: true,
+          sourceMap: false,
+          convertToAbsoluteUrls: false, // ''
           transform: './style.transform.js'
         }
       },
@@ -112,6 +112,7 @@ const getBaseFileName = () => {
 };
 
 module.exports = {
+  mode: production ? 'production' : 'development',
   entry: {
     'CoveoJsSearch.Lazy': ['./src/Lazy.ts'],
     CoveoJsSearch: ['./src/Eager.ts']
@@ -206,7 +207,7 @@ module.exports = {
           {
             loader: 'file-loader',
             options: {
-              name: production ? '../image/[name].[ext]' : 'http://localhost:8080/image/[name].[ext]',
+              name: '../image/[name].[ext]',
               emitFile: false,
               publicPath: ' '
             }
