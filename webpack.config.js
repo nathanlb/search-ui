@@ -4,7 +4,7 @@ const minimize = process.argv.indexOf('minimize') !== -1;
 const analyze = process.argv.indexOf('analyze') !== -1;
 const webpack = require('webpack');
 const path = require('path');
-const ExtractTextPlugin = require('extract-text-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const production = process.env.NODE_ENV === 'production';
 const globalizePath = __dirname + '/lib/globalize/globalize.min.js';
 const analyzer = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
@@ -12,8 +12,8 @@ const analyzer = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 console.log('IS PRODUCTION', production);
 
 let bail;
-let plugins = [];
-let additionalRules = [];
+const plugins = [];
+const additionalRules = [];
 
 if (analyze) {
   plugins.push(new analyzer());
@@ -29,38 +29,37 @@ plugins.push(new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/));
 
 if (production) {
   const cssFilename = minimize ? '../css/CoveoFullSearch.min.css' : '../css/CoveoFullSearch.css';
-  const extractSass = new ExtractTextPlugin({
-    filename: cssFilename
+  const extractSass = new MiniCssExtractPlugin({
+    filename: cssFilename,
+    chunkFilename: cssFilename
   });
+
   additionalRules.push({
     test: /\.scss/,
-    use: extractSass.extract({
-      use: [
-        {
-          loader: 'css-loader',
-          options: {
-            sourceMap: false,
-            minimize: minimize
-          }
-        },
-        {
-          loader: 'resolve-url-loader',
-          options: {
-            keepQuery: true
-          }
-        },
-        {
-          loader: 'sass-loader',
-          options: {
-            sourceMap: true
-          }
+    use: [
+      MiniCssExtractPlugin.loader,
+      {
+        loader: 'css-loader',
+        options: {
+          sourceMap: false,
+          minimize: minimize
         }
-      ],
-      fallback: 'style-loader',
-      // This is important to set the correct relative path inside the generated css correctly
-      publicPath: ''
-    })
+      },
+      {
+        loader: 'resolve-url-loader',
+        options: {
+          keepQuery: true
+        }
+      },
+      {
+        loader: 'sass-loader',
+        options: {
+          sourceMap: true
+        }
+      }
+    ]
   });
+
   plugins.push(extractSass);
   bail = true;
 } else {
@@ -112,10 +111,22 @@ const getBaseFileName = () => {
 };
 
 module.exports = {
-  mode: production ? 'production' : 'development',
+  mode: 'none', // production ? 'production' : 'development',
   entry: {
     'CoveoJsSearch.Lazy': ['./src/Lazy.ts'],
     CoveoJsSearch: ['./src/Eager.ts']
+  },
+  optimization: {
+    splitChunks: {
+      cacheGroups: {
+        styles: {
+          name: 'styles',
+          test: /\.s?[ac]ss$/,
+          chunks: 'all',
+          enforce: true
+        }
+      }
+    }
   },
   output: {
     path: path.resolve('./bin/js'),
