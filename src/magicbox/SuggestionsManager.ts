@@ -1,10 +1,11 @@
 import { compact, defaults, each, indexOf } from 'underscore';
 import { IQuerySuggestSelection, OmniboxEvents } from '../events/OmniboxEvents';
-import { Component } from '../ui/Base/Component';
-import { resultPerRow } from '../ui/QuerySuggestPreview/QuerySuggestPreview';
+import { resultPerRow, QuerySuggestPreview } from '../ui/QuerySuggestPreview/QuerySuggestPreview';
 import { $$, Dom } from '../utils/Dom';
 import { Utils } from '../utils/Utils';
 import { InputManager } from './InputManager';
+import { load } from '../ui/Base/RegisteredNamedMethods';
+import { Component } from '../ui/Base/Component';
 
 export interface Suggestion {
   text?: string;
@@ -64,10 +65,12 @@ export class SuggestionsManager {
     });
 
     this.suggestionsListbox = this.buildSuggestionsContainer();
-    this.suggestionsPreviewContainer = this.initPreviewForSuggestions(this.suggestionsListbox);
-    $$(this.element).append(this.suggestionsPreviewContainer.el);
-    this.addAccessibilityPropertiesForCombobox();
-    this.appendEmptySuggestionOption();
+    this.initPreviewForSuggestions(this.suggestionsListbox).then(container => {
+      this.suggestionsPreviewContainer = container;
+      $$(this.element).append(this.suggestionsPreviewContainer.el);
+      this.addAccessibilityPropertiesForCombobox();
+      this.appendEmptySuggestionOption();
+    });
   }
 
   public handleMouseOver(e) {
@@ -267,16 +270,17 @@ export class SuggestionsManager {
     }).el;
   }
 
-  private get querySuggestPreviewComponent() {
-    const querySuggestPreviewElement: HTMLElement = $$(this.root).find(`.${Component.computeCssClassNameForType('QuerySuggestPreview')}`);
-    if (!querySuggestPreviewElement) {
+  private async getQuerySuggestPreviewComponent() {
+    const componentID = QuerySuggestPreview.ID;
+    if (!$$(this.root).find(Component.computeSelectorForType(componentID))) {
       return;
     }
-    return Component.get(querySuggestPreviewElement);
+    return await load<QuerySuggestPreview>(componentID);
   }
 
-  private initPreviewForSuggestions(suggestions: Dom) {
-    const querySuggestPreview = this.querySuggestPreviewComponent;
+  private async initPreviewForSuggestions(suggestions: Dom) {
+    const querySuggestPreview = await this.getQuerySuggestPreviewComponent();
+    console.log(QuerySuggestPreview);
     if (!querySuggestPreview) {
       return suggestions;
     }
