@@ -654,6 +654,9 @@ SuggestionsManagerTest();
 import { ResultPreviewsGridTest } from './magicbox/ResultPreviewsGridTest';
 ResultPreviewsGridTest();
 
+import { SuggestionsListTest } from './magicbox/SuggestionsListTest';
+SuggestionsListTest();
+
 import { MagicBoxClearTest } from './magicbox/MagicBoxClearTest';
 MagicBoxClearTest();
 
