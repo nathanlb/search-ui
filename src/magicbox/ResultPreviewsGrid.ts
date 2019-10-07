@@ -34,6 +34,8 @@ export type ReceivedSearchResultPreview = SearchResultPreview;
 
 export type ReceivedSearchResultPreviews = ReceivedSearchResultPreview[];
 
+export type OnSelectionChangedCallback = () => any;
+
 /**
  * This class renders a grid of result previews from [`QuerySuggestPreview`]{@link QuerySuggestPreview} inside a given container and allows navigation within it.
  * It waits to receive a first [`SearchResultPreview`]{@link SearchResultPreview} before creating any HTML element.
@@ -61,7 +63,11 @@ export class ResultPreviewsGrid {
   private activePreviews: ActiveSearchResultPreview[];
   private keyboardSelectionMode: boolean;
 
-  constructor(private parentContainer: HTMLElement, options: IResultPreviewsGridOptions = {}) {
+  constructor(
+    private parentContainer: HTMLElement,
+    options: IResultPreviewsGridOptions = {},
+    private onSelectionChanged?: OnSelectionChangedCallback
+  ) {
     this.options = defaults(options, <IResultPreviewsGridOptions>{
       timeout: 2000,
       maximumPreviews: 6,
@@ -186,19 +192,19 @@ export class ResultPreviewsGrid {
   }
 
   public moveUp() {
-    return (this.keyboardSelectionMode = this.move(Direction.Up));
+    return this.move(Direction.Up);
   }
 
   public moveDown() {
-    return (this.keyboardSelectionMode = this.move(Direction.Down));
+    return this.move(Direction.Down);
   }
 
   public moveLeft() {
-    return (this.keyboardSelectionMode = this.move(Direction.Left));
+    return this.move(Direction.Left);
   }
 
   public moveRight() {
-    return (this.keyboardSelectionMode = this.move(Direction.Right));
+    return this.move(Direction.Right);
   }
 
   public getSelectedPreviewElement() {
@@ -218,6 +224,9 @@ export class ResultPreviewsGrid {
       return;
     }
     this.deselectElement(currentSelection);
+    if (this.onSelectionChanged) {
+      this.onSelectionChanged();
+    }
   }
 
   private setSelectedPreviewElement(element: HTMLElement) {
@@ -226,6 +235,9 @@ export class ResultPreviewsGrid {
       return;
     }
     element.classList.add(this.options.selectedClass);
+    if (this.onSelectionChanged) {
+      this.onSelectionChanged();
+    }
   }
 
   private getSelectedPreviewId() {
@@ -347,6 +359,7 @@ export class ResultPreviewsGrid {
     if (currentSelectionId === null) {
       return false;
     }
+    this.keyboardSelectionMode = true;
     const totalLength = this.activePreviews.length;
     const rowLength = this.previewsPerRow;
     switch (direction) {
