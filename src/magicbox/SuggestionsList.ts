@@ -1,6 +1,7 @@
 import { defaults } from 'underscore';
 import { Dom, $$ } from '../utils/Dom';
 import { Suggestion, ISelectableItemsContainer } from './SuggestionsManager';
+import { Component } from '../ui/Base/Component';
 
 export enum SuggestionsListDirection {
   Up = 'Up',
@@ -45,10 +46,10 @@ export class SuggestionsList implements ISelectableItemsContainer<Suggestion, Su
   private keyboardSelectionMode = false;
 
   constructor(private parentContainer: HTMLElement, options: ISuggestionsListOptions = {}) {
+    this.root = Component.resolveRoot(parentContainer);
     this.options = defaults(options, <ISuggestionsListOptions>{
       selectableClass: 'magic-box-suggestion',
-      selectedClass: 'magic-box-selected',
-      timeout: 500
+      selectedClass: 'magic-box-selected'
     });
     this.buildSuggestionsListContainer();
   }
