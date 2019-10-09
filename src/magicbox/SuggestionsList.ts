@@ -1,232 +1,183 @@
 import { defaults } from 'underscore';
 import { Dom, $$ } from '../utils/Dom';
-import { Assert } from '../Core';
-import { Suggestion } from './SuggestionsManager';
+import { Suggestion, ISelectableItemsContainer } from './SuggestionsManager';
 
-enum Direction {
+export enum SuggestionsListDirection {
   Up = 'Up',
   Down = 'Down'
 }
 
-interface ActiveSuggestion extends Suggestion {
+interface IActiveSuggestion extends Suggestion {
   deactivate: () => void;
 }
 
 export interface ISuggestionsListOptions {
   selectableClass?: string;
   selectedClass?: string;
-  timeout?: number;
 }
 
-export type ReceivedSuggestion = Suggestion;
+export interface ISuggestionHoveredEventArgs {
+  suggestion: Suggestion;
+}
 
-export type ReceivedSuggestions = ReceivedSuggestion[];
+export enum SuggestionsListEvents {
+  SuggestionHovered = 'suggestionHovered'
+}
 
-export const SuggestionIdPrefix = 'magic-box-suggestion-';
+export class SuggestionsList implements ISelectableItemsContainer<Suggestion, SuggestionsListDirection> {
+  public static SuggestionIdPrefix = 'magic-box-suggestion-';
 
-export type OnSelectionChangedCallback = () => any;
-
-/**
- * This class renders a list of suggestions from [`OmniboxEvents.populateOmniboxSuggestions`]{@link OmniboxEvents.populateOmniboxSuggestions}
- * inside a given container and allows navigation within it. It waits to receive a first [`Suggestion`]{@link Suggestion}  before creating
- * any HTML element.
- */
-export class SuggestionsList {
-  private static setSuggestionId(element: HTMLElement, id: number) {
-    element.id = SuggestionIdPrefix + id;
+  private static setItemIdOfElement(element: HTMLElement, id: number) {
+    element.id = this.SuggestionIdPrefix + id.toString();
   }
 
-  private static getSuggestionId(element: HTMLElement) {
-    const strId = element.id.substr(SuggestionIdPrefix.length);
+  private static getItemIdFromElement(element: HTMLElement) {
+    const strId = element.id.substr(this.SuggestionIdPrefix.length);
     return strId ? parseInt(strId, 10) : null;
   }
 
+  private root: HTMLElement;
   private suggestionsContainer?: {
     results: Dom;
-  };
+  } = null;
   private options: ISuggestionsListOptions;
-  private queryProcessingRejector: Function;
-  private activeSuggestions: ActiveSuggestion[];
-  private keyboardSelectionMode: boolean;
+  private activeSuggestions: IActiveSuggestion[] = [];
+  private keyboardSelectionMode = false;
 
-  constructor(
-    private parentContainer: HTMLElement,
-    options: ISuggestionsListOptions = {},
-    private onSelectionChanged?: OnSelectionChangedCallback
-  ) {
+  constructor(private parentContainer: HTMLElement, options: ISuggestionsListOptions = {}) {
     this.options = defaults(options, <ISuggestionsListOptions>{
       selectableClass: 'magic-box-suggestion',
       selectedClass: 'magic-box-selected',
       timeout: 500
     });
+    this.buildSuggestionsListContainer();
   }
 
-  /**
-   * Waits for one of the following conditions to be true then creates a container and fills it with the results.
-   * 1. No query was given
-   * 2. All queries were completed
-   * 3. [`timeout`]{@link SuggestionsList.options.timeout} has passed
-   * If the function is called again while it's still processing, the previous call is cancelled and overriden by the new one.
-   */
-  public receiveSuggestions(variantSuggestionsQueries: Array<Promise<ReceivedSuggestions> | ReceivedSuggestions>): Promise<Suggestion[]> {
-    return new Promise((resolve, reject) => {
-      if (this.queryProcessingRejector) {
-        this.queryProcessingRejector('new request queued');
+  public isHoverKeyboardControlled() {
+    return this.keyboardSelectionMode;
+  }
+
+  public setDisplayedItems(suggestions: Suggestion[]) {
+    this.clearDisplayedItems();
+    suggestions.forEach(suggestion =>
+      this.appendSuggestion({
+        ...suggestion,
+        dom: suggestion.dom ? this.modifyDOMFromExistingSuggestion(suggestion) : this.createDOMFromSuggestion(suggestion)
+      })
+    );
+  }
+
+  public getHoveredItem() {
+    if (this.activeSuggestions.length === 0) {
+      return null;
+    }
+    const suggestionId = this.getHoveredItemId();
+    return this.activeSuggestions[suggestionId] || null;
+  }
+
+  public tryHoverOnFirstItem() {
+    if (this.activeSuggestions.length === 0) {
+      return (this.keyboardSelectionMode = false);
+    }
+    this.setHoveredItemFromId(0);
+    return (this.keyboardSelectionMode = true);
+  }
+
+  public tryHoverOnNextItem(direction: SuggestionsListDirection) {
+    const currentSelectionId = this.getHoveredItemId();
+    if (currentSelectionId === null) {
+      return false;
+    }
+    if (direction === SuggestionsListDirection.Down) {
+      if (currentSelectionId === this.activeSuggestions.length - 1) {
+        return false;
       }
-
-      const currentQueries = variantSuggestionsQueries
-        .filter(suggestions => suggestions)
-        .map(suggestions => (suggestions instanceof Promise ? suggestions : Promise.resolve(suggestions)));
-
-      const receivedSuggestions: ReceivedSuggestion[] = [];
-      let numOfUnresolvedQueries: number = currentQueries.length;
-
-      const showAndReturn = () => {
-        this.queryProcessingRejector = null;
-        if (!this.suggestionsContainer) {
-          this.buildSuggestionsListContainer();
-        }
-        this.clearSuggestions();
-        this.appendSuggestions(receivedSuggestions);
-        resolve(this.activeSuggestions);
-      };
-
-      if (numOfUnresolvedQueries === 0) {
-        showAndReturn();
-        return;
+      this.setHoveredItemFromId(currentSelectionId + 1);
+      this.keyboardSelectionMode = true;
+      return true;
+    } else {
+      if (currentSelectionId === 0) {
+        return false;
       }
+      this.setHoveredItemFromId(currentSelectionId - 1);
+      this.keyboardSelectionMode = true;
+      return true;
+    }
+  }
 
-      const rejector = (this.queryProcessingRejector = (message: string) => {
-        this.queryProcessingRejector = null;
-        reject(message);
-      });
-
-      currentQueries.forEach(previews => {
-        previews
-          .then(results => {
-            if (rejector !== this.queryProcessingRejector) {
-              return;
-            }
-            receivedSuggestions.push(...results);
-          })
-          .finally(() => {
-            if (rejector !== this.queryProcessingRejector) {
-              return;
-            }
-            numOfUnresolvedQueries -= 1;
-            if (numOfUnresolvedQueries === 0) {
-              showAndReturn();
-            }
-          });
-      });
-
-      setTimeout(() => {
-        if (rejector !== this.queryProcessingRejector) {
-          return;
-        }
-        showAndReturn();
-      }, this.options.timeout);
+  public clearHover() {
+    const currentSelection = this.getHoveredItemElement();
+    if (!currentSelection) {
+      return;
+    }
+    this.deselectElement(currentSelection);
+    $$(this.root).trigger(SuggestionsListEvents.SuggestionHovered, <ISuggestionHoveredEventArgs>{
+      suggestion: null
     });
   }
 
-  public selectKeyboardFocusedSelection() {
+  public keyboardSelect() {
     if (!this.keyboardSelectionMode) {
       return null;
     }
-    const selection = this.getSelectedSuggestion();
+    const selection = this.getHoveredItem();
     if (!selection) {
       return null;
     }
-    this.clearSelection();
+    this.clearHover();
     $$(selection.dom).trigger('keyboardSelect');
     return selection as Suggestion;
   }
 
-  public moveFirst() {
-    if (!this.activeSuggestions || this.activeSuggestions.length === 0) {
-      return (this.keyboardSelectionMode = false);
-    }
-    this.setSelectedSuggestionId(0);
-    return (this.keyboardSelectionMode = true);
+  private buildSuggestionsListContainer() {
+    const results = $$('div', {
+      className: 'coveo-magicbox-suggestions',
+      id: 'coveo-magicbox-suggestions',
+      role: 'listbox'
+    });
+    this.suggestionsContainer = {
+      results
+    };
+    this.parentContainer.appendChild(results.el);
   }
 
-  public moveUp() {
-    return this.move(Direction.Up);
-  }
-
-  public moveDown() {
-    return this.move(Direction.Down);
-  }
-
-  public getSelectedSuggestionElement() {
-    if (!this.suggestionsContainer) {
-      return null;
-    }
+  private getHoveredItemElement() {
     const selectedElements = this.suggestionsContainer.results.findClass(this.options.selectedClass);
-    if (!selectedElements || selectedElements.length !== 1) {
+    if (selectedElements.length !== 1) {
       return null;
     }
     return selectedElements[0];
   }
 
-  public clearSelection() {
-    const currentSelection = this.getSelectedSuggestionElement();
-    if (!currentSelection) {
-      return;
-    }
-    this.deselectElement(currentSelection);
-    if (this.onSelectionChanged) {
-      this.onSelectionChanged();
-    }
-  }
-
-  private setSelectedSuggestionElement(element: HTMLElement) {
-    this.clearSelection();
+  private setHoveredItemFromElement(element: HTMLElement) {
+    this.clearHover();
     if (!element) {
       return;
     }
-    element.setAttribute('aria-selected', 'true');
     element.classList.add(this.options.selectedClass);
-    if (this.onSelectionChanged) {
-      this.onSelectionChanged();
-    }
+    $$(this.root).trigger(SuggestionsListEvents.SuggestionHovered, <ISuggestionHoveredEventArgs>{
+      suggestion: this.activeSuggestions[SuggestionsList.getItemIdFromElement(element)]
+    });
   }
 
-  private getSelectedSuggestionId() {
-    const element = this.getSelectedSuggestionElement();
+  private getHoveredItemId() {
+    const element = this.getHoveredItemElement();
     if (!element) {
       return null;
     }
-    return SuggestionsList.getSuggestionId(element);
+    return SuggestionsList.getItemIdFromElement(element);
   }
 
-  private setSelectedSuggestionId(id: number) {
-    Assert.isLargerOrEqualsThan(0, id);
-    Assert.isSmallerThan(this.activeSuggestions.length, id);
-    if (!this.activeSuggestions) {
-      return;
-    }
-    this.setSelectedSuggestionElement(this.activeSuggestions[id].dom);
-  }
-
-  private getSelectedSuggestion() {
-    if (!this.activeSuggestions || this.activeSuggestions.length === 0) {
-      return null;
-    }
-    const suggestionId = this.getSelectedSuggestionId();
-    if (suggestionId === null) {
-      return null;
-    }
-    return this.activeSuggestions[suggestionId];
+  private setHoveredItemFromId(id: number) {
+    this.setHoveredItemFromElement(this.activeSuggestions[id].dom);
   }
 
   private deselectElement(element: HTMLElement) {
     this.keyboardSelectionMode = false;
-    element.setAttribute('aria-selected', 'false');
     element.classList.remove(this.options.selectedClass);
   }
 
-  private clearSuggestions() {
+  private clearDisplayedItems() {
     this.keyboardSelectionMode = false;
     if (this.activeSuggestions) {
       this.activeSuggestions.forEach(preview => preview.deactivate());
@@ -260,26 +211,15 @@ export class SuggestionsList {
     return dom;
   }
 
-  private appendSuggestions(suggestions: ReceivedSuggestions) {
-    suggestions.forEach(suggestion =>
-      this.appendSuggestion({
-        ...suggestion,
-        dom: suggestion.dom ? this.modifyDOMFromExistingSuggestion(suggestion) : this.createDOMFromSuggestion(suggestion)
-      })
-    );
-  }
-
-  private appendSuggestion(suggestion: ReceivedSuggestion) {
-    SuggestionsList.setSuggestionId(suggestion.dom, this.activeSuggestions.length);
+  private appendSuggestion(suggestion: Suggestion) {
+    SuggestionsList.setItemIdOfElement(suggestion.dom, this.activeSuggestions.length);
     suggestion.dom.setAttribute('role', 'option');
-    suggestion.dom.setAttribute('aria-selected', 'false');
-    suggestion.dom.setAttribute('aria-label', suggestion.text);
     const events: { name: string; funct: (e: Event) => void }[] = [
       {
         name: 'mouseover',
         funct: () => {
           this.keyboardSelectionMode = false;
-          this.setSelectedSuggestionElement(suggestion.dom);
+          this.setHoveredItemFromElement(suggestion.dom);
         }
       },
       {
@@ -294,7 +234,7 @@ export class SuggestionsList {
       }
     ];
     events.forEach(event => $$(suggestion.dom).on(event.name, event.funct));
-    const activeSuggestion: ActiveSuggestion = {
+    const activeSuggestion: IActiveSuggestion = {
       ...suggestion,
       deactivate: () => events.forEach(event => suggestion.dom.removeEventListener(event.name, event.funct))
     };
@@ -311,38 +251,5 @@ export class SuggestionsList {
     }
     this.activeSuggestions.push(activeSuggestion);
     this.suggestionsContainer.results.append(suggestion.dom);
-  }
-
-  private buildSuggestionsListContainer() {
-    const results = $$('div', {
-      className: 'coveo-magicbox-suggestions',
-      id: 'coveo-magicbox-suggestions',
-      role: 'listbox'
-    });
-    this.suggestionsContainer = {
-      results
-    };
-    this.parentContainer.appendChild(results.el);
-  }
-
-  private move(direction: Direction) {
-    const currentSelectionId = this.getSelectedSuggestionId();
-    if (currentSelectionId === null) {
-      return false;
-    }
-    this.keyboardSelectionMode = true;
-    if (direction === Direction.Down) {
-      if (currentSelectionId === this.activeSuggestions.length - 1) {
-        return false;
-      }
-      this.setSelectedSuggestionId(currentSelectionId + 1);
-      return true;
-    } else {
-      if (currentSelectionId === 0) {
-        return false;
-      }
-      this.setSelectedSuggestionId(currentSelectionId - 1);
-      return true;
-    }
   }
 }
