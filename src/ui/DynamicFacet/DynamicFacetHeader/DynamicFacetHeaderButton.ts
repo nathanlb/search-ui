@@ -1,6 +1,6 @@
 import { $$, Dom } from '../../../utils/Dom';
 import { SVGDom } from '../../../utils/SVGDom';
-import { DynamicFacet, IDynamicFacetElementRenderer } from '../DynamicFacet';
+import { DynamicFacet } from '../DynamicFacet';
 
 export interface IDynamicFacetHeaderButtonOptions {
   label: string;
@@ -10,22 +10,18 @@ export interface IDynamicFacetHeaderButtonOptions {
   iconSVG?: string;
   iconClassName?: string;
   action?: () => void;
-  customRenderer?: IDynamicFacetElementRenderer;
 }
 
 export class DynamicFacetHeaderButton {
   private button: Dom;
   public element: HTMLElement;
 
-  constructor(private facet: DynamicFacet, private rootOptions: IDynamicFacetHeaderButtonOptions) {
+  constructor(facet: DynamicFacet, private rootOptions: IDynamicFacetHeaderButtonOptions) {
     this.create();
   }
 
   private create() {
-    const originalButtonElement = this.createButton();
-    this.button = this.rootOptions.customRenderer
-      ? $$(this.rootOptions.customRenderer(this.facet, originalButtonElement))
-      : $$(this.createButton());
+    this.button = $$(this.createButton());
 
     this.rootOptions.action && this.button.on('click', this.rootOptions.action);
 

@@ -9,7 +9,7 @@ import { Initialization } from '../Base/Initialization';
 import { ResponsiveFacetOptions } from '../ResponsiveComponents/ResponsiveFacetOptions';
 import { ResponsiveDynamicFacets } from '../ResponsiveComponents/ResponsiveDynamicFacets';
 import { DynamicFacetBreadcrumbs } from './DynamicFacetBreadcrumbs';
-import { DynamicFacetHeader, ICustomHeaderRenderer } from './DynamicFacetHeader/DynamicFacetHeader';
+import { DynamicFacetHeader, IDynamicFacetCustomHeaderSections } from './DynamicFacetHeader/DynamicFacetHeader';
 import { DynamicFacetValues } from './DynamicFacetValues/DynamicFacetValues';
 import { QueryEvents, IQuerySuccessEventArgs, IDoneBuildingQueryEventArgs } from '../../events/QueryEvents';
 import { QueryStateModel } from '../../models/QueryStateModel';
@@ -35,11 +35,12 @@ import { IQueryResults } from '../../rest/QueryResults';
 import { FacetType } from '../../rest/Facet/FacetRequest';
 import { DependsOnManager, IDependentFacet } from '../../utils/DependsOnManager';
 
-/**
- * Renderers receive the DynamicFacet component and the original element as arguments and
- * have to return an element that either replaces or modifies the original element.
- */
-export type IDynamicFacetElementRenderer = (facet: DynamicFacet, originalElement: HTMLElement) => HTMLElement;
+export interface IDynamicFacetCustomSection {
+  template?: (facet: DynamicFacet) => string;
+  modifyElement?: (facet: DynamicFacet, element: HTMLElement) => HTMLElement;
+}
+
+export type IDynamicFacetCustomSections = IDynamicFacetCustomHeaderSections;
 
 export interface IDynamicFacetOptions extends IResponsiveComponentOptions {
   id?: string;
@@ -57,7 +58,7 @@ export interface IDynamicFacetOptions extends IResponsiveComponentOptions {
   numberOfValuesInBreadcrumb?: number;
   valueCaption?: any;
   dependsOn?: string;
-  customHeaderRenderer?: ICustomHeaderRenderer;
+  customSections?: IDynamicFacetCustomSections;
 }
 
 /**
@@ -270,11 +271,11 @@ export class DynamicFacet extends Component implements IAutoLayoutAdjustableInsi
      */
     dependsOn: ComponentOptions.buildStringOption(),
     /**
-     * Makes cuztomization possible for headers.
+     * Makes cuztomization possible for the DynamicFacet.
      */
-    customHeaderRenderer: ComponentOptions.buildCustomOption<ICustomHeaderRenderer>(() => {
+    customSections: ComponentOptions.buildCustomOption<IDynamicFacetCustomSections>(() => {
       return null;
-    })
+    }, { defaultValue: {} })
   };
 
   private includedAttributeId: string;
