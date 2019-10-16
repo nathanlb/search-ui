@@ -1,6 +1,5 @@
-import { defaults } from 'underscore';
 import { Dom, $$ } from '../utils/Dom';
-import { Suggestion, ISelectableItemsContainer } from './SuggestionsManager';
+import { Suggestion } from './SuggestionsManager';
 import { Component } from '../ui/Base/Component';
 
 export enum SuggestionsListDirection {
@@ -17,49 +16,56 @@ export interface ISuggestionsListOptions {
   selectedClass?: string;
 }
 
-export interface ISuggestionHoveredEventArgs {
-  suggestion: Suggestion;
-}
-
 export enum SuggestionsListEvents {
-  SuggestionHovered = 'suggestionHovered'
+  SuggestionFocused = 'suggestionFocused',
+  SuggestionBlurred = 'suggestionBlurred'
 }
 
-export class SuggestionsList implements ISelectableItemsContainer<Suggestion, SuggestionsListDirection> {
-  public static SuggestionIdPrefix = 'magic-box-suggestion-';
-
-  private static setItemIdOfElement(element: HTMLElement, id: number) {
-    element.id = this.SuggestionIdPrefix + id.toString();
-  }
-
-  private static getItemIdFromElement(element: HTMLElement) {
-    const strId = element.id.substr(this.SuggestionIdPrefix.length);
-    return strId ? parseInt(strId, 10) : null;
-  }
-
+export class SuggestionsList {
   private root: HTMLElement;
-  private suggestionsContainer?: {
-    results: Dom;
-  } = null;
+  private suggestionsContainer: Dom;
   private options: ISuggestionsListOptions;
-  private activeSuggestions: IActiveSuggestion[] = [];
+  private displayedSuggestions: IActiveSuggestion[] = [];
   private keyboardSelectionMode = false;
+  private suggestionIdPrefix = 'magic-box-suggestion-';
 
-  constructor(private parentContainer: HTMLElement, options: ISuggestionsListOptions = {}) {
-    this.root = Component.resolveRoot(parentContainer);
-    this.options = defaults(options, <ISuggestionsListOptions>{
-      selectableClass: 'magic-box-suggestion',
-      selectedClass: 'magic-box-selected'
-    });
-    this.buildSuggestionsListContainer();
-  }
-
-  public isHoverKeyboardControlled() {
+  public get isFocusKeyboardControlled() {
     return this.keyboardSelectionMode;
   }
 
-  public setDisplayedItems(suggestions: Suggestion[]) {
-    this.clearDisplayedItems();
+  public get focusedSuggestion() {
+    if (this.displayedSuggestions.length === 0) {
+      return null;
+    }
+    const suggestionId = this.getFocusedSuggestionPosition();
+    return this.displayedSuggestions[suggestionId] || null;
+  }
+
+  constructor(private parentContainer: HTMLElement, options: ISuggestionsListOptions = {}) {
+    this.root = Component.resolveRoot(parentContainer);
+    this.options = {
+      selectableClass: 'magic-box-suggestion',
+      selectedClass: 'magic-box-selected',
+      ...options
+    };
+    this.buildSuggestionsListContainer();
+    this.appendEmptySuggestion();
+  }
+
+  public bindOnSuggestionFocused(binding: (e: Event, focusedSuggestion: Suggestion) => void) {
+    $$(this.root).on(SuggestionsListEvents.SuggestionFocused, binding);
+  }
+
+  public bindOnSuggestionBlurred(binding: (e: Event, oldFocusedSuggestion: Suggestion) => void) {
+    $$(this.root).on(SuggestionsListEvents.SuggestionBlurred, binding);
+  }
+
+  public setDisplayedSuggestions(suggestions: Suggestion[]) {
+    this.clearDisplayedSuggestions();
+    if (suggestions.length === 0) {
+      this.appendEmptySuggestion();
+      return;
+    }
     suggestions.forEach(suggestion =>
       this.appendSuggestion({
         ...suggestion,
@@ -68,130 +74,101 @@ export class SuggestionsList implements ISelectableItemsContainer<Suggestion, Su
     );
   }
 
-  public getHoveredItem() {
-    if (this.activeSuggestions.length === 0) {
-      return null;
-    }
-    const suggestionId = this.getHoveredItemId();
-    return this.activeSuggestions[suggestionId] || null;
-  }
-
-  public tryHoverOnFirstItem() {
-    if (this.activeSuggestions.length === 0) {
-      return (this.keyboardSelectionMode = false);
-    }
-    this.setHoveredItemFromId(0);
-    return (this.keyboardSelectionMode = true);
-  }
-
-  public tryHoverOnNextItem(direction: SuggestionsListDirection) {
-    const currentSelectionId = this.getHoveredItemId();
-    if (currentSelectionId === null) {
-      return false;
-    }
-    if (direction === SuggestionsListDirection.Down) {
-      if (currentSelectionId === this.activeSuggestions.length - 1) {
-        return false;
-      }
-      this.setHoveredItemFromId(currentSelectionId + 1);
-      this.keyboardSelectionMode = true;
-      return true;
-    } else {
-      if (currentSelectionId === 0) {
-        return false;
-      }
-      this.setHoveredItemFromId(currentSelectionId - 1);
-      this.keyboardSelectionMode = true;
-      return true;
-    }
-  }
-
-  public clearHover() {
-    const currentSelection = this.getHoveredItemElement();
-    if (!currentSelection) {
+  public focusFirstSuggestion() {
+    if (this.displayedSuggestions.length === 0) {
       return;
     }
-    this.deselectElement(currentSelection);
-    $$(this.root).trigger(SuggestionsListEvents.SuggestionHovered, <ISuggestionHoveredEventArgs>{
-      suggestion: null
-    });
+    this.setFocusedSuggestionFromPosition(0);
+    this.keyboardSelectionMode = true;
   }
 
-  public keyboardSelect() {
+  public focusNextSuggestion(direction: SuggestionsListDirection) {
+    const currentSelectionId = this.getFocusedSuggestionPosition();
+    if (currentSelectionId === null) {
+      return;
+    }
+    const suggestionsLength = this.displayedSuggestions.length;
+    if (suggestionsLength === 1) {
+      return;
+    }
+    const selectionIdIncrement = direction === SuggestionsListDirection.Down ? 1 : -1;
+    this.setFocusedSuggestionFromPosition((currentSelectionId + selectionIdIncrement) % suggestionsLength);
+    this.keyboardSelectionMode = true;
+  }
+
+  public blurFocusedSuggestion() {
+    const oldFocusedSuggestion = this.focusedSuggestion;
+    if (!oldFocusedSuggestion) {
+      return;
+    }
+    this.blurElement(oldFocusedSuggestion.dom);
+    $$(this.root).trigger(SuggestionsListEvents.SuggestionBlurred, oldFocusedSuggestion);
+  }
+
+  public selectKeyboardFocusedSuggestion() {
     if (!this.keyboardSelectionMode) {
       return null;
     }
-    const selection = this.getHoveredItem();
+    const selection = this.focusedSuggestion;
     if (!selection) {
       return null;
     }
-    this.clearHover();
+    this.blurFocusedSuggestion();
     $$(selection.dom).trigger('keyboardSelect');
     return selection as Suggestion;
   }
 
   private buildSuggestionsListContainer() {
-    const results = $$('div', {
+    this.suggestionsContainer = $$('div', {
       className: 'coveo-magicbox-suggestions',
       id: 'coveo-magicbox-suggestions',
       role: 'listbox'
     });
-    this.suggestionsContainer = {
-      results
-    };
-    this.parentContainer.appendChild(results.el);
+    this.parentContainer.appendChild(this.suggestionsContainer.el);
   }
 
-  private getHoveredItemElement() {
-    const selectedElements = this.suggestionsContainer.results.findClass(this.options.selectedClass);
-    if (selectedElements.length !== 1) {
-      return null;
-    }
-    return selectedElements[0];
+  private setSuggestionIdOfElement(element: HTMLElement, id: number) {
+    element.id = this.suggestionIdPrefix + id.toString();
   }
 
-  private setHoveredItemFromElement(element: HTMLElement) {
-    this.clearHover();
-    if (!element) {
-      return;
-    }
+  private getSuggestionIdFromElement(element: HTMLElement) {
+    const strId = element.id.substr(this.suggestionIdPrefix.length);
+    return strId ? parseInt(strId, 10) : null;
+  }
+
+  private setFocusedSuggestionFromElement(element: HTMLElement) {
+    this.blurFocusedSuggestion();
     element.classList.add(this.options.selectedClass);
-    $$(this.root).trigger(SuggestionsListEvents.SuggestionHovered, <ISuggestionHoveredEventArgs>{
-      suggestion: this.activeSuggestions[SuggestionsList.getItemIdFromElement(element)]
-    });
+    $$(this.root).trigger(SuggestionsListEvents.SuggestionFocused, this.displayedSuggestions[this.getSuggestionIdFromElement(element)]);
   }
 
-  private getHoveredItemId() {
-    const element = this.getHoveredItemElement();
-    if (!element) {
+  private getFocusedSuggestionPosition() {
+    const focusedElements = this.suggestionsContainer.findClass(this.options.selectedClass);
+    if (focusedElements.length !== 1) {
       return null;
     }
-    return SuggestionsList.getItemIdFromElement(element);
+    return this.getSuggestionIdFromElement(focusedElements[0]);
   }
 
-  private setHoveredItemFromId(id: number) {
-    this.setHoveredItemFromElement(this.activeSuggestions[id].dom);
+  private setFocusedSuggestionFromPosition(id: number) {
+    this.setFocusedSuggestionFromElement(this.displayedSuggestions[id].dom);
   }
 
-  private deselectElement(element: HTMLElement) {
+  private blurElement(element: HTMLElement) {
     this.keyboardSelectionMode = false;
     element.classList.remove(this.options.selectedClass);
   }
 
-  private clearDisplayedItems() {
+  private clearDisplayedSuggestions() {
     this.keyboardSelectionMode = false;
-    if (this.activeSuggestions) {
-      this.activeSuggestions.forEach(preview => preview.deactivate());
-    }
-    this.activeSuggestions = [];
-    if (this.suggestionsContainer) {
-      this.suggestionsContainer.results.empty();
-    }
+    this.displayedSuggestions.forEach(suggestion => suggestion.deactivate());
+    this.displayedSuggestions = [];
+    this.suggestionsContainer.empty();
   }
 
   private createDOMFromSuggestion(suggestion: Suggestion): HTMLElement {
     const dom = $$('div', {
-      classList: ['magic-box-suggestion', this.options.selectableClass]
+      class: `magic-box-suggestion ${this.options.selectableClass}`
     }).el;
     if (suggestion.html) {
       dom.innerHTML = suggestion.html;
@@ -205,28 +182,29 @@ export class SuggestionsList implements ISelectableItemsContainer<Suggestion, Su
 
   private modifyDOMFromExistingSuggestion(suggestion: Suggestion): HTMLElement {
     const dom = suggestion.dom.cloneNode(true) as HTMLElement;
-    this.deselectElement(dom);
+    this.blurElement(dom);
     $$(dom)
       .findClass(this.options.selectableClass)
-      .forEach(selectable => this.deselectElement(selectable as HTMLElement));
+      .forEach(selectable => this.blurElement(selectable as HTMLElement));
+    dom.classList.add(this.options.selectableClass);
     return dom;
   }
 
   private appendSuggestion(suggestion: Suggestion) {
-    SuggestionsList.setItemIdOfElement(suggestion.dom, this.activeSuggestions.length);
+    this.setSuggestionIdOfElement(suggestion.dom, this.displayedSuggestions.length);
     suggestion.dom.setAttribute('role', 'option');
     const events: { name: string; funct: (e: Event) => void }[] = [
       {
         name: 'mouseover',
         funct: () => {
           this.keyboardSelectionMode = false;
-          this.setHoveredItemFromElement(suggestion.dom);
+          this.setFocusedSuggestionFromElement(suggestion.dom);
         }
       },
       {
         name: 'mouseout',
         funct: () => {
-          this.deselectElement(suggestion.dom);
+          this.blurElement(suggestion.dom);
         }
       },
       {
@@ -250,7 +228,11 @@ export class SuggestionsList implements ISelectableItemsContainer<Suggestion, Su
       );
       suggestion.dom.appendChild(suggestionLabel.el);
     }
-    this.activeSuggestions.push(activeSuggestion);
-    this.suggestionsContainer.results.append(suggestion.dom);
+    this.displayedSuggestions.push(activeSuggestion);
+    this.suggestionsContainer.append(suggestion.dom);
+  }
+
+  private appendEmptySuggestion() {
+    this.suggestionsContainer.append($$('div', { role: 'option' }).el);
   }
 }
