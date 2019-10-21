@@ -7,13 +7,18 @@ export enum SuggestionsListDirection {
   Down = 'Down'
 }
 
-interface IActiveSuggestion extends Suggestion {
+export interface ISuggestion {
+  text: string;
+  element: HTMLElement;
+}
+
+interface IActiveSuggestion extends ISuggestion {
   deactivate: () => void;
 }
 
 export interface ISuggestionsListOptions {
-  selectableClass?: string;
-  selectedClass?: string;
+  selectableClass: string;
+  selectedClass: string;
 }
 
 export enum SuggestionsListEvents {
@@ -25,23 +30,18 @@ export class SuggestionsList {
   private root: HTMLElement;
   private suggestionsContainer: Dom;
   private options: ISuggestionsListOptions;
-  private displayedSuggestions: IActiveSuggestion[] = [];
-  private keyboardSelectionMode = false;
+  private activeSuggestions: IActiveSuggestion[] = [];
   private suggestionIdPrefix = 'magic-box-suggestion-';
 
-  public get isFocusKeyboardControlled() {
-    return this.keyboardSelectionMode;
-  }
-
   public get focusedSuggestion() {
-    if (this.displayedSuggestions.length === 0) {
+    if (this.activeSuggestions.length === 0) {
       return null;
     }
-    const suggestionId = this.getFocusedSuggestionPosition();
-    return this.displayedSuggestions[suggestionId] || null;
+    const suggestionId = this.getFocusPosition();
+    return this.activeSuggestions[suggestionId] || null;
   }
 
-  constructor(private parentContainer: HTMLElement, options: ISuggestionsListOptions = {}) {
+  constructor(private parentContainer: HTMLElement, options: Partial<ISuggestionsListOptions> = {}) {
     this.root = Component.resolveRoot(parentContainer);
     this.options = {
       selectableClass: 'magic-box-suggestion',
@@ -60,40 +60,35 @@ export class SuggestionsList {
     $$(this.root).on(SuggestionsListEvents.SuggestionBlurred, binding);
   }
 
-  public setDisplayedSuggestions(suggestions: Suggestion[]) {
+  public displaySuggestions(suggestions: Suggestion[]) {
     this.clearDisplayedSuggestions();
     if (suggestions.length === 0) {
       this.appendEmptySuggestion();
       return;
     }
-    suggestions.forEach(suggestion =>
-      this.appendSuggestion({
-        ...suggestion,
-        dom: suggestion.dom ? this.modifyDOMFromExistingSuggestion(suggestion) : this.createDOMFromSuggestion(suggestion)
-      })
-    );
+    this.activeSuggestions = suggestions.map((suggestion, id) => this.buildSuggestion(suggestion, id));
+    this.activeSuggestions.forEach(suggestion => this.suggestionsContainer.append(suggestion.element));
+    return this.activeSuggestions as ISuggestion[];
   }
 
   public focusFirstSuggestion() {
-    if (this.displayedSuggestions.length === 0) {
+    if (this.activeSuggestions.length === 0) {
       return;
     }
-    this.setFocusedSuggestionFromPosition(0);
-    this.keyboardSelectionMode = true;
+    this.focusAtPosition(0);
   }
 
   public focusNextSuggestion(direction: SuggestionsListDirection) {
-    const currentSelectionId = this.getFocusedSuggestionPosition();
+    const currentSelectionId = this.getFocusPosition();
     if (currentSelectionId === null) {
       return;
     }
-    const suggestionsLength = this.displayedSuggestions.length;
+    const suggestionsLength = this.activeSuggestions.length;
     if (suggestionsLength === 1) {
       return;
     }
     const selectionIdIncrement = direction === SuggestionsListDirection.Down ? 1 : -1;
-    this.setFocusedSuggestionFromPosition((currentSelectionId + selectionIdIncrement) % suggestionsLength);
-    this.keyboardSelectionMode = true;
+    this.focusAtPosition((currentSelectionId + selectionIdIncrement) % suggestionsLength);
   }
 
   public blurFocusedSuggestion() {
@@ -101,21 +96,8 @@ export class SuggestionsList {
     if (!oldFocusedSuggestion) {
       return;
     }
-    this.blurElement(oldFocusedSuggestion.dom);
+    this.blurElement(oldFocusedSuggestion.element);
     $$(this.root).trigger(SuggestionsListEvents.SuggestionBlurred, oldFocusedSuggestion);
-  }
-
-  public selectKeyboardFocusedSuggestion() {
-    if (!this.keyboardSelectionMode) {
-      return null;
-    }
-    const selection = this.focusedSuggestion;
-    if (!selection) {
-      return null;
-    }
-    this.blurFocusedSuggestion();
-    $$(selection.dom).trigger('keyboardSelect');
-    return selection as Suggestion;
   }
 
   private buildSuggestionsListContainer() {
@@ -136,13 +118,7 @@ export class SuggestionsList {
     return strId ? parseInt(strId, 10) : null;
   }
 
-  private setFocusedSuggestionFromElement(element: HTMLElement) {
-    this.blurFocusedSuggestion();
-    element.classList.add(this.options.selectedClass);
-    $$(this.root).trigger(SuggestionsListEvents.SuggestionFocused, this.displayedSuggestions[this.getSuggestionIdFromElement(element)]);
-  }
-
-  private getFocusedSuggestionPosition() {
+  private getFocusPosition() {
     const focusedElements = this.suggestionsContainer.findClass(this.options.selectedClass);
     if (focusedElements.length !== 1) {
       return null;
@@ -150,86 +126,76 @@ export class SuggestionsList {
     return this.getSuggestionIdFromElement(focusedElements[0]);
   }
 
-  private setFocusedSuggestionFromPosition(id: number) {
-    this.setFocusedSuggestionFromElement(this.displayedSuggestions[id].dom);
+  private focusAtPosition(position: number) {
+    this.focusElement(this.activeSuggestions[position].element);
+  }
+
+  private focusElement(element: HTMLElement) {
+    this.blurFocusedSuggestion();
+    element.classList.add(this.options.selectedClass);
+    element.setAttribute('aria-selected', 'true');
+    $$(this.root).trigger(SuggestionsListEvents.SuggestionFocused, this.activeSuggestions[this.getSuggestionIdFromElement(element)]);
   }
 
   private blurElement(element: HTMLElement) {
-    this.keyboardSelectionMode = false;
     element.classList.remove(this.options.selectedClass);
+    element.setAttribute('aria-selected', 'false');
   }
 
   private clearDisplayedSuggestions() {
-    this.keyboardSelectionMode = false;
-    this.displayedSuggestions.forEach(suggestion => suggestion.deactivate());
-    this.displayedSuggestions = [];
+    this.activeSuggestions.forEach(suggestion => suggestion.deactivate());
+    this.activeSuggestions = [];
     this.suggestionsContainer.empty();
   }
 
-  private createDOMFromSuggestion(suggestion: Suggestion): HTMLElement {
-    const dom = $$('div', {
+  private buildSuggestionElement(suggestion: Suggestion): HTMLElement {
+    if (suggestion.dom) {
+      const newElement = suggestion.dom.cloneNode(true) as HTMLElement;
+      this.blurElement(newElement);
+      $$(newElement)
+        .findClass(this.options.selectableClass)
+        .forEach(selectable => this.blurElement(selectable as HTMLElement));
+      newElement.classList.add(this.options.selectableClass);
+      return newElement;
+    }
+    const newElement = $$('div', {
       class: `magic-box-suggestion ${this.options.selectableClass}`
     }).el;
     if (suggestion.html) {
-      dom.innerHTML = suggestion.html;
-      return dom;
+      newElement.innerHTML = suggestion.html;
+    } else if (suggestion.text) {
+      newElement.innerText = suggestion.text;
     }
-    if (suggestion.text) {
-      dom.innerText = suggestion.text;
-    }
-    return dom;
+    return newElement;
   }
 
-  private modifyDOMFromExistingSuggestion(suggestion: Suggestion): HTMLElement {
-    const dom = suggestion.dom.cloneNode(true) as HTMLElement;
-    this.blurElement(dom);
-    $$(dom)
-      .findClass(this.options.selectableClass)
-      .forEach(selectable => this.blurElement(selectable as HTMLElement));
-    dom.classList.add(this.options.selectableClass);
-    return dom;
-  }
-
-  private appendSuggestion(suggestion: Suggestion) {
-    this.setSuggestionIdOfElement(suggestion.dom, this.displayedSuggestions.length);
-    suggestion.dom.setAttribute('role', 'option');
+  private buildSuggestion(providedSuggestion: Suggestion, id: number): IActiveSuggestion {
+    const element = this.buildSuggestionElement(providedSuggestion);
+    this.setSuggestionIdOfElement(element, id);
+    element.setAttribute('role', 'option');
+    element.setAttribute('aria-selected', 'false');
+    const text = $$(element).text();
+    element.setAttribute('aria-label', text);
     const events: { name: string; funct: (e: Event) => void }[] = [
       {
         name: 'mouseover',
-        funct: () => {
-          this.keyboardSelectionMode = false;
-          this.setFocusedSuggestionFromElement(suggestion.dom);
-        }
+        funct: () => this.focusElement(element)
       },
       {
         name: 'mouseout',
-        funct: () => {
-          this.blurElement(suggestion.dom);
-        }
+        funct: () => this.blurElement(element)
       },
       {
         name: 'keyboardSelect',
-        funct: () => suggestion.onSelect && suggestion.onSelect()
+        funct: () => providedSuggestion.onSelect && providedSuggestion.onSelect()
       }
     ];
-    events.forEach(event => $$(suggestion.dom).on(event.name, event.funct));
-    const activeSuggestion: IActiveSuggestion = {
-      ...suggestion,
-      deactivate: () => events.forEach(event => suggestion.dom.removeEventListener(event.name, event.funct))
+    events.forEach(event => $$(element).on(event.name, event.funct));
+    return {
+      element,
+      text,
+      deactivate: () => events.forEach(event => element.removeEventListener(event.name, event.funct))
     };
-    if (suggestion.separator) {
-      suggestion.dom.classList.add('magic-box-suggestion-seperator');
-      const suggestionLabel = $$(
-        'div',
-        {
-          className: 'magic-box-suggestion-seperator-label'
-        },
-        suggestion.separator
-      );
-      suggestion.dom.appendChild(suggestionLabel.el);
-    }
-    this.displayedSuggestions.push(activeSuggestion);
-    this.suggestionsContainer.append(suggestion.dom);
   }
 
   private appendEmptySuggestion() {
