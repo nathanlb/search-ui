@@ -33,7 +33,7 @@ export class SuggestionsList {
   private activeSuggestions: IActiveSuggestion[] = [];
   private suggestionIdPrefix = 'magic-box-suggestion-';
 
-  public get focusedSuggestion() {
+  public get focusedSuggestion(): ISuggestion {
     if (this.activeSuggestions.length === 0) {
       return null;
     }
@@ -52,11 +52,11 @@ export class SuggestionsList {
     this.appendEmptySuggestion();
   }
 
-  public bindOnSuggestionFocused(binding: (e: Event, focusedSuggestion: Suggestion) => void) {
+  public bindOnSuggestionFocused(binding: (e: Event, focusedSuggestion: ISuggestion) => void) {
     $$(this.root).on(SuggestionsListEvents.SuggestionFocused, binding);
   }
 
-  public bindOnSuggestionBlurred(binding: (e: Event, oldFocusedSuggestion: Suggestion) => void) {
+  public bindOnSuggestionBlurred(binding: (e: Event, oldFocusedSuggestion: ISuggestion) => void) {
     $$(this.root).on(SuggestionsListEvents.SuggestionBlurred, binding);
   }
 
