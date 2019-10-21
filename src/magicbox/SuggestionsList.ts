@@ -78,6 +78,14 @@ export class SuggestionsList {
     this.focusAtPosition(0);
   }
 
+  public focusLastSuggestion() {
+    const length = this.activeSuggestions.length;
+    if (length === 0) {
+      return;
+    }
+    this.focusAtPosition(length - 1);
+  }
+
   public focusNextSuggestion(direction: SuggestionsListDirection) {
     const currentSelectionId = this.getFocusPosition();
     if (currentSelectionId === null) {
@@ -88,7 +96,7 @@ export class SuggestionsList {
       return;
     }
     const selectionIdIncrement = direction === SuggestionsListDirection.Down ? 1 : -1;
-    this.focusAtPosition((currentSelectionId + selectionIdIncrement) % suggestionsLength);
+    this.focusAtPosition(Math.min(Math.max(currentSelectionId + selectionIdIncrement, 0), suggestionsLength - 1));
   }
 
   public blurFocusedSuggestion() {
