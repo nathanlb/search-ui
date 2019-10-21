@@ -1,10 +1,11 @@
-import { compact, defaults, each, indexOf } from 'underscore';
 import { IQuerySuggestSelection, OmniboxEvents } from '../events/OmniboxEvents';
 import { Component } from '../ui/Base/Component';
-import { resultPerRow } from '../ui/QuerySuggestPreview/QuerySuggestPreview';
 import { $$, Dom } from '../utils/Dom';
-import { Utils } from '../utils/Utils';
 import { InputManager } from './InputManager';
+import { ResultPreviewsGrid, ISearchResultPreview, ResultPreviewsGridDirection, IProvidedSearchResultPreview } from './ResultPreviewsGrid';
+import { SuggestionsList, SuggestionsListDirection, ISuggestion } from './SuggestionsList';
+import { QueriesProcessor, QueryProcessResultStatus } from './QueriesProcessor';
+import { l } from '../strings/Strings';
 
 export interface Suggestion {
   text?: string;
@@ -16,8 +17,10 @@ export interface Suggestion {
 }
 
 export interface SuggestionsManagerOptions {
-  selectableClass?: string;
-  selectedClass?: string;
+  selectableSuggestionClass?: string;
+  selectedSuggestionClass?: string;
+  selectedResultPreviewClass?: string;
+  selectableResultPreviewClass?: string;
   timeout?: number;
 }
 
@@ -28,15 +31,87 @@ enum Direction {
   Right = 'Right'
 }
 
+export interface IPopulateSearchResultPreviewsEventArgs {
+  suggestion: ISuggestion;
+  previewQueries: (IProvidedSearchResultPreview[] | Promise<IProvidedSearchResultPreview[]>)[];
+}
+
+export enum SuggestionsManagerEvents {
+  PopulateSearchResultPreviews = 'populateSearchResultPreviews'
+}
+
+export enum FocusableContainerType {
+  SuggestionsList = 'suggestionsList',
+  ResultPreviewsGrid = 'resultPreviewsGrid',
+  None = 'none'
+}
+
+export type IFocusedItem =
+  | {
+      container: FocusableContainerType.SuggestionsList;
+      suggestion: Suggestion;
+    }
+  | {
+      container: FocusableContainerType.ResultPreviewsGrid;
+      preview: ISearchResultPreview;
+    }
+  | {
+      container: FocusableContainerType.None;
+    };
+
+export type IFocusMovement =
+  | {
+      handled: true;
+      focusedSuggestion: ISuggestion;
+    }
+  | {
+      handled: false;
+    };
+
 export class SuggestionsManager {
-  public hasSuggestions: boolean;
-  private pendingSuggestion: Promise<Suggestion[]>;
   private options: SuggestionsManagerOptions;
-  private keyboardFocusedSuggestion: HTMLElement;
-  private suggestionsListbox: Dom;
-  private suggestionsPreviewContainer: Dom;
-  private lastSelectedSuggestion: HTMLElement;
+  private lastPreviewedSuggestion: ISuggestion;
+  private containsSuggestions: boolean;
+  private containsPreviews: boolean;
+  private suggestionsList: SuggestionsList;
+  private resultPreviewsGrid: ResultPreviewsGrid;
+  private suggestionsProcessor: QueriesProcessor<Suggestion>;
+  private resultPreviewsProcessor: QueriesProcessor<IProvidedSearchResultPreview>;
+  private focusablesContainer: Dom;
+  private isKeyboardControlled: boolean;
   private root: HTMLElement;
+
+  public static createContainer() {
+    return $$('div', {
+      className: 'magic-box-suggestions',
+      id: 'magic-box-suggestions-container'
+    }).el;
+  }
+
+  public get hasSuggestions() {
+    return this.containsSuggestions;
+  }
+
+  public get isExpanded() {
+    return $$(this.element).hasClass('magic-box-hasSuggestion');
+  }
+
+  public set isExpanded(expanded: boolean) {
+    $$(this.magicBoxContainer).setAttribute('aria-expanded', expanded.toString());
+    this.element.classList.toggle('magic-box-hasSuggestion', expanded);
+  }
+
+  private get isLoadingPreviews() {
+    return $$(this.focusablesContainer)
+      .find('.coveo-preview-results')
+      .classList.contains('coveo-preview-results-loading');
+  }
+
+  private set isLoadingPreviews(isLoading: boolean) {
+    $$(this.focusablesContainer)
+      .find('.coveo-preview-results')
+      .classList.toggle('coveo-preview-results-loading', isLoading);
+  }
 
   constructor(
     private element: HTMLElement,
@@ -45,476 +120,301 @@ export class SuggestionsManager {
     options?: SuggestionsManagerOptions
   ) {
     this.root = Component.resolveRoot(element);
-    this.options = defaults(options, <SuggestionsManagerOptions>{
-      selectableClass: 'magic-box-suggestion',
-      selectedClass: 'magic-box-selected'
-    });
-    // Put in a sane default, so as to not reject every suggestions if not set on initialization
-    if (this.options.timeout == undefined) {
-      this.options.timeout = 500;
-    }
+    this.options = options;
+    this.containsSuggestions = this.containsPreviews = false;
+    this.isKeyboardControlled = false;
+    this.isExpanded = false;
 
-    this.hasSuggestions = false;
-
-    $$(this.element).on('mouseover', e => {
-      this.handleMouseOver(e);
-    });
-
-    $$(this.element).on('mouseout', e => {
-      this.handleMouseOut(e);
-    });
-
-    this.suggestionsListbox = this.buildSuggestionsContainer();
-    this.suggestionsPreviewContainer = this.initPreviewForSuggestions(this.suggestionsListbox);
-    $$(this.element).append(this.suggestionsPreviewContainer.el);
-    this.addAccessibilityPropertiesForCombobox();
-    this.appendEmptySuggestionOption();
-  }
-
-  public handleMouseOver(e) {
-    let target = $$(<HTMLElement>e.target);
-    let parents = target.parents(this.options.selectableClass);
-    if (target.hasClass(this.options.selectableClass)) {
-      this.processMouseSelection(target.el);
-    } else if (parents.length > 0 && this.element.contains(parents[0])) {
-      this.processMouseSelection(parents[0]);
-    }
-  }
-
-  public handleMouseOut(e) {
-    let target = $$(<HTMLElement>e.target);
-    let targetParents = target.parents(this.options.selectableClass);
-
-    //e.relatedTarget is not available if moving off the browser window or is an empty object `{}` when moving out of namespace in LockerService.
-    if (e.relatedTarget && $$(e.relatedTarget).isValid()) {
-      let relatedTargetParents = $$(<HTMLElement>e.relatedTarget).parents(this.options.selectableClass);
-      if (target.hasClass(this.options.selectedClass) && !$$(<HTMLElement>e.relatedTarget).hasClass(this.options.selectableClass)) {
-        this.removeSelectedStatus(target.el);
-      } else if (relatedTargetParents.length == 0 && targetParents.length > 0) {
-        this.removeSelectedStatus(targetParents[0]);
-      }
-    } else {
-      if (target.hasClass(this.options.selectedClass)) {
-        this.removeSelectedStatus(target.el);
-      } else if (targetParents.length > 0) {
-        this.removeSelectedStatus(targetParents[0]);
-      }
-    }
-    $$(this.root).trigger(OmniboxEvents.querySuggestLoseFocus);
+    this.element.classList.remove('magic-box-hasSuggestion', 'magic-box-hasPreviews');
+    this.buildFocusablesContainer();
+    this.initializeSuggestionsList();
+    this.initializeSearchResultPreviewsGrid();
+    this.initializeAccessibilityProperties();
   }
 
   public moveDown() {
-    this.move(Direction.Down);
+    return this.moveFocus(Direction.Down);
   }
 
   public moveUp() {
-    this.move(Direction.Up);
+    return this.moveFocus(Direction.Up);
   }
 
   public moveLeft() {
-    this.move(Direction.Left);
+    return this.moveFocus(Direction.Left);
   }
 
   public moveRight() {
-    this.move(Direction.Right);
+    return this.moveFocus(Direction.Right);
   }
 
-  public selectAndReturnKeyboardFocusedElement(): HTMLElement {
-    const selected = this.keyboardFocusedSuggestion;
-    if (selected != null) {
-      $$(selected).trigger('keyboardSelect');
-      // By definition, once an element has been "selected" with the keyboard,
-      // it is not longer "active" since the event has been processed.
-      this.keyboardFocusedSuggestion = null;
-    }
-    return selected;
-  }
-
-  public clearKeyboardFocusedElement() {
-    this.keyboardFocusedSuggestion = null;
-  }
-
-  public mergeSuggestions(suggestions: Array<Promise<Suggestion[]> | Suggestion[]>, callback?: (suggestions: Suggestion[]) => void) {
-    let results: Suggestion[] = [];
-    let timeout;
-    let stillNeedToResolve = true;
-    // clean empty / null values in the array of suggestions
-    suggestions = compact(suggestions);
-    const promise = (this.pendingSuggestion = new Promise<Suggestion[]>((resolve, reject) => {
-      // Concat all promises results together in one flat array.
-      // If one promise take too long to resolve, simply skip it
-      each(suggestions, (suggestion: Promise<Suggestion[]>) => {
-        let shouldRejectPart = false;
-        setTimeout(function() {
-          shouldRejectPart = true;
-          stillNeedToResolve = false;
-        }, this.options.timeout);
-        suggestion.then((item: Suggestion[]) => {
-          if (!shouldRejectPart && item) {
-            results = results.concat(item);
-          }
-        });
-      });
-
-      // Resolve the promise when one of those conditions is met first :
-      // - All suggestions resolved
-      // - Timeout is reached before all promises have processed -> resolve with what we have so far
-      // - No suggestions given (length 0 or undefined)
-      const onResolve = () => {
-        if (stillNeedToResolve) {
-          if (timeout) {
-            clearTimeout(timeout);
-          }
-          if (results.length == 0) {
-            resolve([]);
-          } else if (promise == this.pendingSuggestion || this.pendingSuggestion == null) {
-            resolve(results.sort((a, b) => b.index - a.index));
-          } else {
-            reject('new request queued');
-          }
-        }
-        stillNeedToResolve = false;
+  public keyboardSelect(): IFocusedItem {
+    if (!this.isKeyboardControlled) {
+      return {
+        container: FocusableContainerType.None
       };
-
-      if (suggestions.length == 0) {
-        onResolve();
-      }
-      if (suggestions == undefined) {
-        onResolve();
-      }
-
-      timeout = setTimeout(function() {
-        onResolve();
-      }, this.options.timeout);
-
-      Promise.all(suggestions).then(() => onResolve());
-    }));
-
-    promise
-      .then((suggestions: Suggestion[]) => {
-        if (callback) {
-          callback(suggestions);
-        }
-        this.updateSuggestions(suggestions);
-        return suggestions;
-      })
-      .catch(() => {
-        return null;
-      });
-  }
-
-  public updateSuggestions(suggestions: Suggestion[]) {
-    this.suggestionsListbox.empty();
-    this.inputManager.input.removeAttribute('aria-activedescendant');
-
-    this.hasSuggestions = suggestions.length > 0;
-
-    $$(this.element).toggleClass('magic-box-hasSuggestion', this.hasSuggestions);
-    $$(this.magicBoxContainer).setAttribute('aria-expanded', this.hasSuggestions.toString());
-
-    if (!this.hasSuggestions) {
-      this.appendEmptySuggestionOption();
-      $$(this.root).trigger(OmniboxEvents.querySuggestLoseFocus);
-      return;
     }
-
-    each(suggestions, (suggestion: Suggestion) => {
-      const dom = suggestion.dom ? this.modifyDomFromExistingSuggestion(suggestion.dom) : this.createDomFromSuggestion(suggestion);
-
-      dom.setAttribute('id', `magic-box-suggestion-${indexOf(suggestions, suggestion)}`);
-      dom.setAttribute('role', 'option');
-      dom.setAttribute('aria-selected', 'false');
-      dom.setAttribute('aria-label', dom.text());
-
-      dom['suggestion'] = suggestion;
-      this.suggestionsListbox.append(dom.el);
-    });
-
-    $$(this.root).trigger(OmniboxEvents.querySuggestRendered);
-  }
-
-  public get selectedSuggestion(): Suggestion {
-    if (this.htmlElementIsSuggestion(this.keyboardFocusedSuggestion)) {
-      return this.returnMoved(this.keyboardFocusedSuggestion) as Suggestion;
+    const focusedPreview = this.resultPreviewsGrid.focusedPreview;
+    if (focusedPreview) {
+      this.selectPreview(focusedPreview);
+      return {
+        container: FocusableContainerType.ResultPreviewsGrid,
+        preview: focusedPreview
+      };
     }
-    return null;
-  }
-
-  private processKeyboardSelection(suggestion: HTMLElement) {
-    this.addSelectedStatus(suggestion);
-    this.updateSelectedSuggestion(suggestion.innerText);
-    this.keyboardFocusedSuggestion = suggestion;
-    $$(this.inputManager.input).setAttribute('aria-activedescendant', $$(suggestion).getAttribute('id'));
-  }
-
-  private processKeyboardPreviewSelection(suggestion: HTMLElement) {
-    this.addSelectedStatus(suggestion);
-    this.keyboardFocusedSuggestion = suggestion;
-  }
-
-  private processMouseSelection(suggestion: HTMLElement) {
-    this.addSelectedStatus(suggestion);
-    this.updateSelectedSuggestion(suggestion.innerText);
-    this.keyboardFocusedSuggestion = null;
-  }
-
-  private buildSuggestionsContainer() {
-    return $$('div', {
-      className: 'coveo-magicbox-suggestions',
-      id: 'coveo-magicbox-suggestions',
-      role: 'listbox'
-    });
-  }
-
-  private buildPreviewContainer() {
-    return $$('div', {
-      className: 'coveo-preview-container'
-    }).el;
-  }
-
-  private get querySuggestPreviewComponent() {
-    const querySuggestPreviewElement: HTMLElement = $$(this.root).find(`.${Component.computeCssClassNameForType('QuerySuggestPreview')}`);
-    if (!querySuggestPreviewElement) {
-      return;
+    const focusedSuggestion = this.suggestionsList.focusedSuggestion;
+    if (focusedSuggestion) {
+      $$(this.root).trigger(OmniboxEvents.querySuggestSelection, <IQuerySuggestSelection>{ suggestion: focusedSuggestion.text });
+      this.selectSuggestion(focusedSuggestion);
+      return {
+        container: FocusableContainerType.SuggestionsList,
+        suggestion: focusedSuggestion
+      };
     }
-    return Component.get(querySuggestPreviewElement);
+    return {
+      container: FocusableContainerType.None
+    };
   }
 
-  private initPreviewForSuggestions(suggestions: Dom) {
-    const querySuggestPreview = this.querySuggestPreviewComponent;
-    if (!querySuggestPreview) {
-      return suggestions;
-    }
-
-    const suggestionContainerParent = $$('div', {
-      className: 'coveo-suggestion-container'
-    });
-
-    const previewContainer = this.buildPreviewContainer();
-    suggestionContainerParent.append(suggestions.el);
-    suggestionContainerParent.append(previewContainer);
-    return suggestionContainerParent;
-  }
-
-  private createDomFromSuggestion(suggestion: Suggestion) {
-    const dom = $$('div', {
-      className: `magic-box-suggestion ${this.options.selectableClass}`
-    });
-
-    dom.on('click', () => {
-      this.selectSuggestion(suggestion);
-    });
-
-    dom.on('keyboardSelect', () => {
-      this.selectSuggestion(suggestion);
-    });
-
-    if (suggestion.html) {
-      dom.el.innerHTML = suggestion.html;
-      return dom;
-    }
-
-    if (suggestion.text) {
-      dom.text(suggestion.text);
-
-      return dom;
-    }
-
-    if (suggestion.separator) {
-      dom.addClass('magic-box-suggestion-seperator');
-      const suggestionLabel = $$(
-        'div',
-        {
-          className: 'magic-box-suggestion-seperator-label'
-        },
-        suggestion.separator
-      );
-      dom.append(suggestionLabel.el);
-      return dom;
-    }
-
-    return dom;
-  }
-
-  private selectSuggestion(suggestion: Suggestion) {
-    suggestion.onSelect();
-    $$(this.root).trigger(OmniboxEvents.querySuggestSelection, <IQuerySuggestSelection>{ suggestion: suggestion.text });
-  }
-
-  private appendEmptySuggestionOption() {
-    // Accessibility tools reports that a listbox element must always have at least one child with an option
-    // Even if there is no suggestions to show.
-    this.suggestionsListbox.append($$('div', { role: 'option' }).el);
-  }
-
-  private modifyDomFromExistingSuggestion(dom: HTMLElement) {
-    // this need to be done if the selection is in cache and the dom is set in the suggestion
-    this.removeSelectedStatus(dom);
-    const found = $$(dom).find('.' + this.options.selectableClass);
-    this.removeSelectedStatus(found);
-    return $$(dom);
-  }
-
-  private move(direction: Direction) {
-    const previewSelectables = $$(this.element).findAll(`.coveo-preview-selectable`);
-    if (previewSelectables.length > 0) {
-      this.moveWithQuerySuggestPreview(direction);
-    } else {
-      this.moveWithinSuggestion(direction);
-    }
-  }
-
-  private moveWithinSuggestion(direction: Direction) {
-    const currentlySelected = $$(this.element).find(`.${this.options.selectedClass}`);
-    const selectables = $$(this.element).findAll(`.${this.options.selectableClass}`);
-    const currentIndex = indexOf(selectables, currentlySelected);
-
-    let index = direction === Direction.Up ? currentIndex - 1 : currentIndex + 1;
-    index = (index + selectables.length) % selectables.length;
-
-    this.lastSelectedSuggestion = selectables[index];
-
-    this.selectQuerySuggest(this.lastSelectedSuggestion);
-  }
-
-  private selectQuerySuggest(suggestion: HTMLElement) {
-    if (suggestion) {
-      this.processKeyboardSelection(suggestion);
-    } else {
-      this.keyboardFocusedSuggestion = null;
-      this.inputManager.input.removeAttribute('aria-activedescendant');
-    }
-
-    return suggestion;
-  }
-
-  private moveWithQuerySuggestPreview(direction: Direction) {
-    const currentlySelected = $$(this.element).find(`.${this.options.selectedClass}`);
-    const omniboxSelectables = $$(this.element).findAll(`.${this.options.selectableClass}`);
-    const previewSelectables = $$(this.element).findAll(`.coveo-preview-selectable`);
-    const omniboxIndex = indexOf(omniboxSelectables, currentlySelected);
-    const previewIndex = indexOf(previewSelectables, currentlySelected);
-
-    const verticalMove = direction === Direction.Up || direction === Direction.Down;
-    const suggestionIsSelected = omniboxIndex > -1;
-    if (suggestionIsSelected && verticalMove) {
-      this.moveWithinSuggestion(direction);
-      return;
-    }
-
-    const noPreviewDisplayed = previewSelectables.length === 0;
-    const directionIsLeft = direction === Direction.Left;
-    const noPreviewSelected = previewIndex === -1;
-    if (noPreviewDisplayed || (directionIsLeft && noPreviewSelected)) {
-      return;
-    }
-    this.moveWithinPreview(direction);
-  }
-
-  private moveWithinPreview(direction: Direction) {
-    const previewSelectables = $$(this.element).findAll(`.coveo-preview-selectable`);
-
-    let newSelectedIndex;
-    if (direction === Direction.Up || direction === Direction.Down) {
-      newSelectedIndex = this.moveVerticallyInPreview(direction);
-    }
-
-    if (direction === Direction.Left || direction === Direction.Right) {
-      newSelectedIndex = this.moveHorizontallyInPreview(direction);
-    }
-    if (Utils.isNullOrUndefined(newSelectedIndex)) {
-      return;
-    }
-
-    newSelectedIndex = (newSelectedIndex + previewSelectables.length) % previewSelectables.length;
-    this.processKeyboardPreviewSelection(previewSelectables[newSelectedIndex]);
-  }
-
-  private moveVerticallyInPreview(direction: Direction) {
-    const currentlySelected = $$(this.element).find(`.${this.options.selectedClass}`);
-    const previewSelectables = $$(this.element).findAll(`.coveo-preview-selectable`);
-    const previewIndex = indexOf(previewSelectables, currentlySelected);
-
-    if (previewSelectables.length <= resultPerRow) {
+  public async receiveSuggestions(queries: (Suggestion[] | Promise<Suggestion[]>)[]) {
+    const suggestionsResponse = await this.suggestionsProcessor.processQueries(queries);
+    if (suggestionsResponse.status === QueryProcessResultStatus.Overriden) {
       return null;
     }
-    const offset = Math.ceil(previewSelectables.length / 2);
-    return direction === Direction.Up ? previewIndex - offset : previewIndex + offset;
+    const suggestions = suggestionsResponse.items.sort((a, b) => b.index - a.index);
+    this.isExpanded = this.containsSuggestions = suggestions.length > 0;
+    const activeSuggestions = this.suggestionsList.displaySuggestions(suggestions);
+    if (activeSuggestions) {
+      activeSuggestions.forEach(suggestion => $$(suggestion.element).on('click', () => this.selectSuggestion(suggestion)));
+    }
+    await this.clearSearchResultPreviews();
+    $$(this.root).trigger(OmniboxEvents.querySuggestRendered);
+    return suggestions;
   }
 
-  private moveHorizontallyInPreview(direction: Direction) {
-    const currentlySelected = $$(this.element).find(`.${this.options.selectedClass}`);
-    const previewSelectables = $$(this.element).findAll(`.coveo-preview-selectable`);
-    const previewIndex = indexOf(previewSelectables, currentlySelected);
+  public blur() {
+    this.suggestionsList.blurFocusedSuggestion();
+  }
 
-    if (previewIndex === 0 && direction === Direction.Left) {
-      this.selectQuerySuggest(this.lastSelectedSuggestion);
+  public getFocusedSuggestion(): ISuggestion {
+    return this.suggestionsList.focusedSuggestion;
+  }
+
+  private selectSuggestion(suggestion: ISuggestion) {
+    $$(suggestion.element).trigger('keyboardSelect');
+    this.blur();
+    this.isExpanded = false;
+  }
+
+  private selectPreview(preview: ISearchResultPreview) {
+    $$(preview.element).trigger('keyboardSelect');
+    this.resultPreviewsGrid.blurFocusedPreview();
+    this.isExpanded = false;
+  }
+
+  private fetchSearchResultPreviewsFor(suggestion: ISuggestion) {
+    const populateEventArgs: IPopulateSearchResultPreviewsEventArgs = {
+      suggestion,
+      previewQueries: []
+    };
+    $$(this.root).trigger(SuggestionsManagerEvents.PopulateSearchResultPreviews, populateEventArgs);
+    return populateEventArgs.previewQueries;
+  }
+
+  private async receiveSearchResultPreviews(
+    suggestion: ISuggestion,
+    queries: (IProvidedSearchResultPreview[] | Promise<IProvidedSearchResultPreview[]>)[]
+  ) {
+    this.isLoadingPreviews = true;
+    this.resultPreviewsGrid.blurFocusedPreview();
+    const previewsResponse = await this.resultPreviewsProcessor.processQueries(queries);
+    if (previewsResponse.status === QueryProcessResultStatus.Overriden) {
       return;
     }
-    return direction === Direction.Left ? previewIndex - 1 : previewIndex + 1;
-  }
-
-  private returnMoved(selected) {
-    if (selected != null) {
-      if (selected['suggestion']) {
-        return selected['suggestion'];
-      }
-      if (selected['no-text-suggestion']) {
-        return null;
-      }
-      if (selected instanceof HTMLElement) {
-        return {
-          text: $$(selected).text()
-        };
-      }
+    this.isLoadingPreviews = false;
+    this.lastPreviewedSuggestion = suggestion;
+    const previews = previewsResponse.items;
+    this.containsPreviews = previews.length > 0;
+    this.element.classList.toggle('magic-box-hasPreviews', this.containsPreviews);
+    const activePreviews = this.resultPreviewsGrid.displayPreviews(previews);
+    if (activePreviews) {
+      activePreviews.forEach(preview => $$(preview.element).on('click', () => this.selectPreview(preview)));
     }
-    return null;
-  }
-
-  private addSelectedStatus(suggestion: HTMLElement): void {
-    const selected = this.element.getElementsByClassName(this.options.selectedClass);
-    for (let i = 0; i < selected.length; i++) {
-      const elem = <HTMLElement>selected.item(i);
-      this.removeSelectedStatus(elem);
+    if (suggestion) {
+      this.resultPreviewsGrid.setStatusMessage(l('SearchResultPreviewsResultsStatus', suggestion.text));
+    } else {
+      this.resultPreviewsGrid.clearStatusMessage();
     }
-    $$(suggestion).addClass(this.options.selectedClass);
-    this.updateSelectedSuggestion(suggestion.innerText);
-    this.updateAreaSelectedIfDefined(suggestion, 'true');
   }
 
-  private updateSelectedSuggestion(suggestion: string) {
-    $$(this.root).trigger(OmniboxEvents.querySuggestGetFocus, <IQuerySuggestSelection>{
-      suggestion
+  private async clearSearchResultPreviews() {
+    await this.receiveSearchResultPreviews(null, []);
+  }
+
+  private buildFocusablesContainer() {
+    this.element.appendChild(
+      (this.focusablesContainer = $$('div', {
+        className: 'coveo-suggestion-container'
+      })).el
+    );
+  }
+
+  private initializeSuggestionsList() {
+    const selectableClass = this.options.selectableSuggestionClass;
+    const selectedClass = this.options.selectedSuggestionClass;
+    this.suggestionsList = new SuggestionsList(this.focusablesContainer.el, {
+      ...(selectableClass && { selectableClass }),
+      ...(selectedClass && { selectedClass })
+    });
+    this.suggestionsList.bindOnSuggestionFocused((_, suggestion) => this.onSuggestionFocused(suggestion));
+    this.suggestionsList.bindOnSuggestionBlurred(() => this.onSuggestionBlurred());
+    const { timeout } = this.options;
+    this.suggestionsProcessor = new QueriesProcessor({
+      ...(timeout && { timeout })
     });
   }
 
-  private removeSelectedStatus(suggestion: HTMLElement): void {
-    $$(suggestion).removeClass(this.options.selectedClass);
-    this.updateAreaSelectedIfDefined(suggestion, 'false');
+  private initializeSearchResultPreviewsGrid() {
+    const selectableClass = this.options.selectableResultPreviewClass;
+    const selectedClass = this.options.selectedResultPreviewClass;
+    this.resultPreviewsGrid = new ResultPreviewsGrid(this.focusablesContainer.el, {
+      ...(selectableClass && { selectableClass }),
+      ...(selectedClass && { selectedClass })
+    });
+    this.resultPreviewsGrid.bindOnPreviewFocused((_, preview) => this.onPreviewFocused(preview));
+    this.resultPreviewsGrid.bindOnPreviewBlurred(() => this.onPreviewBlurred());
+    const { timeout } = this.options;
+    this.resultPreviewsProcessor = new QueriesProcessor({
+      ...(timeout && { timeout })
+    });
   }
 
-  private updateAreaSelectedIfDefined(suggestion: HTMLElement, value: string): void {
-    if ($$(suggestion).getAttribute('aria-selected')) {
-      $$(suggestion).setAttribute('aria-selected', value);
-    }
-  }
-
-  private addAccessibilityPropertiesForCombobox() {
+  private initializeAccessibilityProperties() {
     const combobox = $$(this.magicBoxContainer);
     const input = $$(this.inputManager.input);
 
-    combobox.setAttribute('aria-expanded', 'false');
+    const ownedFocusablesStr = this.focusablesContainer
+      .children()
+      .map(focusable => focusable.id)
+      .join(' ');
+
     combobox.setAttribute('role', 'combobox');
-    combobox.setAttribute('aria-owns', 'coveo-magicbox-suggestions');
+    combobox.setAttribute('aria-owns', ownedFocusablesStr);
     combobox.setAttribute('aria-haspopup', 'listbox');
 
     input.el.removeAttribute('aria-activedescendant');
-    input.setAttribute('aria-controls', 'coveo-magicbox-suggestions');
+    input.setAttribute('aria-controls', ownedFocusablesStr);
     input.setAttribute('aria-autocomplete', 'list');
   }
 
-  private htmlElementIsSuggestion(selected: HTMLElement) {
-    const omniboxSelectables = $$(this.element).findAll(`.${this.options.selectableClass}`);
-    return indexOf(omniboxSelectables, selected) > -1;
+  private moveFocus(direction: Direction): IFocusMovement {
+    if (!this.isExpanded) {
+      if (!this.hasSuggestions || direction !== Direction.Down) {
+        return { handled: false };
+      }
+      this.isExpanded = true;
+      return { handled: true, focusedSuggestion: this.getFocusedSuggestion() };
+    }
+    let handled = false;
+    const isPreviewFocused = !!this.resultPreviewsGrid.focusedPreview;
+    if (isPreviewFocused) {
+      switch (direction) {
+        case Direction.Up:
+          this.resultPreviewsGrid.focusNextPreview(ResultPreviewsGridDirection.Up);
+          break;
+        case Direction.Down:
+          this.resultPreviewsGrid.focusNextPreview(ResultPreviewsGridDirection.Down);
+          break;
+        case Direction.Left:
+          const oldFocusedPreview = this.resultPreviewsGrid.focusedPreview;
+          this.resultPreviewsGrid.focusNextPreview(ResultPreviewsGridDirection.Left);
+          if (this.resultPreviewsGrid.focusedPreview === oldFocusedPreview) {
+            this.resultPreviewsGrid.blurFocusedPreview();
+          }
+          break;
+        case Direction.Right:
+          this.resultPreviewsGrid.focusNextPreview(ResultPreviewsGridDirection.Right);
+          break;
+      }
+      handled = true;
+    } else {
+      const isSuggestionFocused = !!this.suggestionsList.focusedSuggestion;
+      const oldFocusedSuggestion = this.suggestionsList.focusedSuggestion;
+      if (isSuggestionFocused) {
+        switch (direction) {
+          case Direction.Up:
+            this.suggestionsList.focusNextSuggestion(SuggestionsListDirection.Up);
+            if (this.suggestionsList.focusedSuggestion === oldFocusedSuggestion) {
+              this.suggestionsList.blurFocusedSuggestion();
+            }
+            handled = true;
+            break;
+          case Direction.Down:
+            this.suggestionsList.focusNextSuggestion(SuggestionsListDirection.Down);
+            if (this.suggestionsList.focusedSuggestion === oldFocusedSuggestion) {
+              this.suggestionsList.blurFocusedSuggestion();
+            }
+            handled = true;
+            break;
+          case Direction.Left:
+            handled = this.containsPreviews;
+            break;
+          case Direction.Right:
+            if ((handled = this.containsPreviews) && !this.isLoadingPreviews) {
+              this.resultPreviewsGrid.focusFirstPreview();
+            }
+            break;
+        }
+      } else {
+        if (direction === Direction.Down) {
+          this.suggestionsList.focusFirstSuggestion();
+          handled = true;
+        } else if (direction === Direction.Up) {
+          this.suggestionsList.focusLastSuggestion();
+          handled = true;
+        }
+      }
+    }
+    if (!handled) {
+      return { handled: false };
+    }
+    this.isKeyboardControlled = true;
+    return {
+      handled,
+      focusedSuggestion: this.getFocusedSuggestion() || (isPreviewFocused ? this.lastPreviewedSuggestion : null)
+    };
+  }
+
+  private async onSuggestionFocused(suggestion: ISuggestion) {
+    this.isKeyboardControlled = false;
+    $$(this.inputManager.input).setAttribute('aria-activedescendant', suggestion.element.id);
+    $$(this.root).trigger(OmniboxEvents.querySuggestGetFocus, <IQuerySuggestSelection>{
+      suggestion: suggestion.text
+    });
+    this.resultPreviewsGrid.blurFocusedPreview();
+    if (this.lastPreviewedSuggestion !== suggestion) {
+      await this.receiveSearchResultPreviews(suggestion, this.fetchSearchResultPreviewsFor(suggestion));
+    } else {
+      this.isLoadingPreviews = false;
+      this.resultPreviewsProcessor.overrideIfProcessing();
+    }
+  }
+
+  private onSuggestionBlurred() {
+    this.isKeyboardControlled = false;
+    this.inputManager.input.removeAttribute('aria-activedescendant');
+  }
+
+  private onPreviewFocused(preview: ISearchResultPreview) {
+    this.isKeyboardControlled = false;
+    $$(this.inputManager.input).setAttribute('aria-activedescendant', preview.element.id);
+  }
+
+  private onPreviewBlurred() {
+    this.isKeyboardControlled = false;
+    const focusedSuggestion = this.getFocusedSuggestion();
+    if (focusedSuggestion) {
+      $$(this.inputManager.input).setAttribute('aria-activedescendant', focusedSuggestion.element.id);
+    }
   }
 }

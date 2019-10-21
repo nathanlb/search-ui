@@ -1,6 +1,7 @@
 import { $$, Dom } from '../utils/Dom';
 import { findIndex } from 'underscore';
 import { Component } from '../ui/Base/Component';
+import 'styling/_ResultPreviewsGrid';
 
 export enum ResultPreviewsGridDirection {
   Up = 'Up',

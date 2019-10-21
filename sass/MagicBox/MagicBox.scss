@@ -117,16 +117,9 @@
     .magic-box-underlay .magic-box-ghost-text {
       visibility: visible;
     }
-    .magic-box-suggestions.magic-box-hasSuggestion {
-      display: block;
-      .coveo-magicbox-suggestions {
-        border: $default-border;
-      }
-      .coveo-suggestion-container {
-        border: $default-border;
-        .coveo-magicbox-suggestions {
-          border: none;
-        }
+    .magic-box-suggestions {
+      &.magic-box-hasSuggestion {
+        display: block;
       }
     }
   }
@@ -139,8 +132,29 @@
     overflow: visible;
     background: $white;
     z-index: 1;
-    display: none;
     font-family: arial, sans-serif;
+    display: none;
+    &.magic-box-hasPreviews {
+      .coveo-suggestion-container {
+        .coveo-preview-container {
+          display: block;
+        }
+      }
+    }
+    .coveo-suggestion-container {
+      @include display(inline-flex);
+      @include flex-wrap (nowrap);
+      @include align-items (flex-start);
+      border: $default-border;
+      .coveo-magicbox-suggestions {
+        @include flex-basis(30%);
+        @include flex-grow(1);
+        @include flex-shrink(0);
+      }
+      .coveo-preview-container {
+        display: none;
+      }
+    }
     .magic-box-suggestion-seperator,
     .magic-box-suggestion {
       opacity: 1;
@@ -187,29 +201,9 @@
       }
     }
     .magic-box-suggestion {
-      cursor: pointer;
       line-height: $lineHeight;
       padding: $padding;
       font-size: $fontSize;
-      background: $white;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      border-top: 1px solid $grey-50;
-      color: $grey-900;
-      .magic-box-hightlight {
-        font-weight: bold;
-        color: $black;
-      }
-      &:first-child {
-        border-top: none;
-      }
-      &.magic-box-selected {
-        background: $cyan-50 !important;
-      }
-      &:hover {
-        background: $grey-100;
-      }
     }
   }
   &.magic-box-inline {

@@ -1,0 +1,44 @@
+@import 'MagicBox/Colors';
+@import 'Variables';
+
+@mixin coveo-preview-container($columns: 3) {
+  border: none;
+  background: $white;
+  .coveo-preview-header {
+    padding: 10px;
+    font-weight: normal;
+    margin-top: 0;
+  }
+  .coveo-preview-results {
+    @include display(inline-flex);
+    @include flex-wrap(wrap);
+    &.coveo-preview-results-loading {
+      opacity: 0;
+      pointer-events: none;
+      @include animation(loadingFade 1s infinite);
+    }
+    .coveo-preview-layout {
+      box-sizing: border-box;
+      $margin: 10px;
+      margin: $margin;
+      padding: 10px;
+      width: calc(#{100% / $columns} - #{$margin * 2});
+      text-align: center;
+      @include align-items(flex-start);
+      &.coveo-preview-selectable {
+        cursor: pointer;
+        &.magic-box-selected {
+          outline: $default-border;
+          outline-offset: -1px;
+        }
+        &:hover {
+          background-color: $grey-100;
+        }
+      }
+    }
+  }
+}
+
+.coveo-preview-container {
+  @include coveo-preview-container();
+}

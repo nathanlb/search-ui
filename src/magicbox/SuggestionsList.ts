@@ -1,6 +1,7 @@
 import { Dom, $$ } from '../utils/Dom';
 import { Suggestion } from './SuggestionsManager';
 import { Component } from '../ui/Base/Component';
+import 'styling/_SuggestionsList';
 
 export enum SuggestionsListDirection {
   Up = 'Up',
