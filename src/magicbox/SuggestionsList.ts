@@ -106,7 +106,6 @@ export class SuggestionsList {
       return;
     }
     this.blurElement(oldFocusedSuggestion.element);
-    $$(this.root).trigger(SuggestionsListEvents.SuggestionBlurred, oldFocusedSuggestion);
   }
 
   private buildSuggestionsListContainer() {
@@ -149,6 +148,7 @@ export class SuggestionsList {
   private blurElement(element: HTMLElement) {
     element.classList.remove(this.options.selectedClass);
     element.setAttribute('aria-selected', 'false');
+    $$(this.root).trigger(SuggestionsListEvents.SuggestionBlurred, this.activeSuggestions[this.getSuggestionIdFromElement(element)]);
   }
 
   private clearDisplayedSuggestions() {
