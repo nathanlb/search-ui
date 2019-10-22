@@ -138,7 +138,6 @@ export class ResultPreviewsGrid {
       return;
     }
     this.blurElement(oldFocusedPreview.element);
-    $$(this.root).trigger(ResultPreviewsGridEvents.PreviewBlurred, oldFocusedPreview);
   }
 
   public setStatusMessage(text: string) {
@@ -204,6 +203,7 @@ export class ResultPreviewsGrid {
   private blurElement(element: HTMLElement) {
     element.classList.remove(this.options.selectedClass);
     element.setAttribute('aria-selected', 'false');
+    $$(this.root).trigger(ResultPreviewsGridEvents.PreviewBlurred, this.activePreviews[this.getPreviewIdFromElement(element)]);
   }
 
   private clearDisplayedPreviews() {
