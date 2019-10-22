@@ -1,9 +1,53 @@
 @import 'MagicBox/Colors';
 @import 'Variables';
 
-@mixin coveo-preview-container($columns: 3) {
+@mixin attachTo($attachment) {
+  position: absolute;
+  @if $attachment != bottom {
+    top: 0;
+  }
+  @if $attachment != top {
+    bottom: 0;
+  }
+  @if $attachment != right {
+    left: 0;
+  }
+  @if $attachment != left {
+    right: 0;
+  }
+}
+
+@mixin coveo-default-result-preview($maxImageHeightRelativeToWidth: 100%) {
+  position: relative;
+  padding: $maxImageHeightRelativeToWidth 0 0 0;
+  margin: 0;
+  .CoveoImageFieldValue {
+    @include attachTo(top);
+    padding: $maxImageHeightRelativeToWidth 0 0 0;
+    span {
+      @include attachTo(all);
+      @include display(flex);
+      @include justify-content(center);
+      @include align-items(center);
+      img {
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        margin: 0;
+      }
+    }
+  }
+  .CoveoResultLink {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@mixin coveo-preview-container($columns: 2) {
   border: none;
-  background: $white;
   .coveo-preview-header {
     padding: 10px;
     font-weight: normal;
@@ -12,6 +56,8 @@
   .coveo-preview-results {
     @include display(inline-flex);
     @include flex-wrap(wrap);
+    @include align-items(stretch);
+    width: 100%;
     &.coveo-preview-results-loading {
       opacity: 0;
       pointer-events: none;
@@ -19,12 +65,10 @@
     }
     .coveo-preview-layout {
       box-sizing: border-box;
-      $margin: 10px;
+      $margin: 4px;
       margin: $margin;
-      padding: 10px;
+      padding: 5px;
       width: calc(#{100% / $columns} - #{$margin * 2});
-      text-align: center;
-      @include align-items(flex-start);
       &.coveo-preview-selectable {
         cursor: pointer;
         &.magic-box-selected {
@@ -34,7 +78,13 @@
         &:hover {
           background-color: $grey-100;
         }
+        .coveo-default-result-preview {
+          @include coveo-default-result-preview();
+        }
       }
+    }
+    .coveo-preview-header {
+      text-align: center;
     }
   }
 }

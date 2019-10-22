@@ -136,8 +136,14 @@
     display: none;
     &.magic-box-hasPreviews {
       .coveo-suggestion-container {
+        .magic-box-suggestion {
+          &.magic-box-suggestion-expanded {
+            text-decoration: underline;
+          }
+        }
         .coveo-preview-container {
           display: block;
+          width: 0;
         }
       }
     }

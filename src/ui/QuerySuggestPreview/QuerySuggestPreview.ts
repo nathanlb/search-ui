@@ -14,10 +14,26 @@ import {
 } from '../Analytics/AnalyticsActionListMeta';
 import { SuggestionsManagerEvents, IPopulateSearchResultPreviewsEventArgs, Suggestion } from '../../magicbox/SuggestionsManager';
 import { IProvidedSearchResultPreview } from '../../magicbox/ResultPreviewsGrid';
+import { HtmlTemplate } from '../Templates/HtmlTemplate';
 
 export interface IQuerySuggestPreview {
   numberOfPreviewResults?: number;
   resultTemplate?: Template;
+}
+
+export function createDefaultSearchResultPreviewTemplate() {
+  return HtmlTemplate.create(
+    $$(
+      'script',
+      { className: 'result-template', type: 'text/html' },
+      $$(
+        'div',
+        { className: 'coveo-result-frame coveo-default-result-preview' },
+        $$('div', { className: 'CoveoImageFieldValue', 'data-field': '@ccimage' }),
+        $$('a', { className: 'CoveoResultLink' })
+      )
+    ).el
+  );
 }
 
 export class QuerySuggestPreview extends Component implements IComponentBindings {
@@ -61,10 +77,7 @@ export class QuerySuggestPreview extends Component implements IComponentBindings
     this.options = ComponentOptions.initComponentOptions(element, QuerySuggestPreview, options);
 
     if (!this.options.resultTemplate) {
-      this.logger.warn(
-        `Specifying a result template is required for the 'QuerySuggestPreview' component to work properly. See `,
-        `https://docs.coveo.com/340/#providing-query-suggestion-result-previews`
-      );
+      this.options.resultTemplate = createDefaultSearchResultPreviewTemplate();
     }
 
     this.bind.onRootElement(SuggestionsManagerEvents.PopulateSearchResultPreviews, (args: IPopulateSearchResultPreviewsEventArgs) =>
