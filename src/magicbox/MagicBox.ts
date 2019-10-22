@@ -14,6 +14,7 @@ export interface Options {
   selectableSuggestionClass?: string;
   selectedSuggestionClass?: string;
   suggestionTimeout?: number;
+  querySearchResultPreviewsDelay?: number;
 }
 
 export class MagicBoxInstance {
@@ -89,7 +90,8 @@ export class MagicBoxInstance {
     this.suggestionsManager = new SuggestionsManager(suggestionsContainer, this.element, this.inputManager, {
       selectableSuggestionClass: this.options.selectableSuggestionClass,
       selectedSuggestionClass: this.options.selectedSuggestionClass,
-      timeout: this.options.suggestionTimeout
+      timeout: this.options.suggestionTimeout,
+      querySearchResultPreviewsDelay: this.options.querySearchResultPreviewsDelay
     });
 
     this.magicBoxClear = new MagicBoxClear(this);
@@ -195,7 +197,7 @@ export class MagicBoxInstance {
     if (!this.suggestionsManager.hasSuggestions) {
       return true;
     }
-    let movement: IFocusMovement = { handled: false };
+    let movement: IFocusMovement;
     switch (key) {
       case KEYBOARD.UP_ARROW:
         movement = this.suggestionsManager.moveUp();

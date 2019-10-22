@@ -6,6 +6,7 @@ import { ResultPreviewsGrid, ISearchResultPreview, ResultPreviewsGridDirection, 
 import { SuggestionsList, SuggestionsListDirection, ISuggestion } from './SuggestionsList';
 import { QueriesProcessor, QueryProcessResultStatus } from './QueriesProcessor';
 import { l } from '../strings/Strings';
+import { Utils } from '../utils/Utils';
 
 export interface Suggestion {
   text?: string;
@@ -22,6 +23,7 @@ export interface SuggestionsManagerOptions {
   selectedResultPreviewClass?: string;
   selectableResultPreviewClass?: string;
   timeout?: number;
+  querySearchResultPreviewsDelay?: number;
 }
 
 enum Direction {
@@ -59,14 +61,10 @@ export type IFocusedItem =
       container: FocusableContainerType.None;
     };
 
-export type IFocusMovement =
-  | {
-      handled: true;
-      focusedSuggestion: ISuggestion;
-    }
-  | {
-      handled: false;
-    };
+export interface IFocusMovement {
+  handled: boolean;
+  focusedSuggestion: ISuggestion;
+}
 
 export class SuggestionsManager {
   private options: SuggestionsManagerOptions;
@@ -79,6 +77,7 @@ export class SuggestionsManager {
   private resultPreviewsProcessor: QueriesProcessor<IProvidedSearchResultPreview>;
   private focusablesContainer: Dom;
   private isKeyboardControlled: boolean;
+  private fetchResultPreviewsPendingPromise: Promise<void>;
   private root: HTMLElement;
 
   public static createContainer() {
@@ -99,12 +98,6 @@ export class SuggestionsManager {
   public set isExpanded(expanded: boolean) {
     $$(this.magicBoxContainer).setAttribute('aria-expanded', expanded.toString());
     this.element.classList.toggle('magic-box-hasSuggestion', expanded);
-  }
-
-  private get isLoadingPreviews() {
-    return $$(this.focusablesContainer)
-      .find('.coveo-preview-results')
-      .classList.contains('coveo-preview-results-loading');
   }
 
   private set isLoadingPreviews(isLoading: boolean) {
@@ -187,7 +180,7 @@ export class SuggestionsManager {
     if (activeSuggestions) {
       activeSuggestions.forEach(suggestion => $$(suggestion.element).on('click', () => this.selectSuggestion(suggestion)));
     }
-    await this.clearSearchResultPreviews();
+    this.clearSearchResultPreviews();
     $$(this.root).trigger(OmniboxEvents.querySuggestRendered);
     return suggestions;
   }
@@ -221,19 +214,14 @@ export class SuggestionsManager {
     return populateEventArgs.previewQueries;
   }
 
-  private async receiveSearchResultPreviews(
-    suggestion: ISuggestion,
-    queries: (IProvidedSearchResultPreview[] | Promise<IProvidedSearchResultPreview[]>)[]
-  ) {
-    this.isLoadingPreviews = true;
-    this.resultPreviewsGrid.blurFocusedPreview();
-    const previewsResponse = await this.resultPreviewsProcessor.processQueries(queries);
-    if (previewsResponse.status === QueryProcessResultStatus.Overriden) {
-      return;
+  private expandSuggestion(suggestion: ISuggestion, previews: IProvidedSearchResultPreview[]) {
+    if (this.lastPreviewedSuggestion) {
+      this.lastPreviewedSuggestion.element.classList.remove('magic-box-suggestion-expanded');
     }
-    this.isLoadingPreviews = false;
     this.lastPreviewedSuggestion = suggestion;
-    const previews = previewsResponse.items;
+    if (suggestion) {
+      this.lastPreviewedSuggestion.element.classList.add('magic-box-suggestion-expanded');
+    }
     this.containsPreviews = previews.length > 0;
     this.element.classList.toggle('magic-box-hasPreviews', this.containsPreviews);
     const activePreviews = this.resultPreviewsGrid.displayPreviews(previews);
@@ -247,8 +235,22 @@ export class SuggestionsManager {
     }
   }
 
-  private async clearSearchResultPreviews() {
-    await this.receiveSearchResultPreviews(null, []);
+  private async processSearchResultPreviews(
+    suggestion: ISuggestion,
+    queries: (IProvidedSearchResultPreview[] | Promise<IProvidedSearchResultPreview[]>)[]
+  ) {
+    this.isLoadingPreviews = true;
+    this.resultPreviewsGrid.blurFocusedPreview();
+    const previewsResponse = await this.resultPreviewsProcessor.processQueries(queries);
+    if (previewsResponse.status === QueryProcessResultStatus.Overriden) {
+      return;
+    }
+    this.isLoadingPreviews = false;
+    this.expandSuggestion(suggestion, previewsResponse.items);
+  }
+
+  private clearSearchResultPreviews() {
+    this.expandSuggestion(null, []);
   }
 
   private buildFocusablesContainer() {
@@ -310,7 +312,7 @@ export class SuggestionsManager {
   private moveFocus(direction: Direction): IFocusMovement {
     if (!this.isExpanded) {
       if (!this.hasSuggestions || direction !== Direction.Down) {
-        return { handled: false };
+        return { handled: false, focusedSuggestion: null };
       }
       this.isExpanded = true;
       return { handled: true, focusedSuggestion: this.getFocusedSuggestion() };
@@ -338,9 +340,8 @@ export class SuggestionsManager {
       }
       handled = true;
     } else {
-      const isSuggestionFocused = !!this.suggestionsList.focusedSuggestion;
       const oldFocusedSuggestion = this.suggestionsList.focusedSuggestion;
-      if (isSuggestionFocused) {
+      if (oldFocusedSuggestion) {
         switch (direction) {
           case Direction.Up:
             this.suggestionsList.focusNextSuggestion(SuggestionsListDirection.Up);
@@ -360,7 +361,7 @@ export class SuggestionsManager {
             handled = this.containsPreviews;
             break;
           case Direction.Right:
-            if ((handled = this.containsPreviews) && !this.isLoadingPreviews) {
+            if ((handled = this.containsPreviews) && oldFocusedSuggestion === this.lastPreviewedSuggestion) {
               this.resultPreviewsGrid.focusFirstPreview();
             }
             break;
@@ -376,7 +377,7 @@ export class SuggestionsManager {
       }
     }
     if (!handled) {
-      return { handled: false };
+      return { handled: false, focusedSuggestion: null };
     }
     this.isKeyboardControlled = true;
     return {
@@ -391,9 +392,14 @@ export class SuggestionsManager {
     $$(this.root).trigger(OmniboxEvents.querySuggestGetFocus, <IQuerySuggestSelection>{
       suggestion: suggestion.text
     });
+    const pending = (this.fetchResultPreviewsPendingPromise = Utils.waitUntil(this.options.querySearchResultPreviewsDelay));
+    await pending;
+    if (this.fetchResultPreviewsPendingPromise !== pending) {
+      return;
+    }
     this.resultPreviewsGrid.blurFocusedPreview();
     if (this.lastPreviewedSuggestion !== suggestion) {
-      await this.receiveSearchResultPreviews(suggestion, this.fetchSearchResultPreviewsFor(suggestion));
+      await this.processSearchResultPreviews(suggestion, this.fetchSearchResultPreviewsFor(suggestion));
     } else {
       this.isLoadingPreviews = false;
       this.resultPreviewsProcessor.overrideIfProcessing();
@@ -401,6 +407,7 @@ export class SuggestionsManager {
   }
 
   private onSuggestionBlurred() {
+    this.fetchResultPreviewsPendingPromise = null;
     this.isKeyboardControlled = false;
     this.inputManager.input.removeAttribute('aria-activedescendant');
   }

@@ -18,7 +18,6 @@ import { IProvidedSearchResultPreview } from '../../magicbox/ResultPreviewsGrid'
 export interface IQuerySuggestPreview {
   numberOfPreviewResults?: number;
   resultTemplate?: Template;
-  executeQueryDelay: number;
 }
 
 export class QuerySuggestPreview extends Component implements IComponentBindings {
@@ -29,13 +28,6 @@ export class QuerySuggestPreview extends Component implements IComponentBindings
       QuerySuggestPreview: QuerySuggestPreview
     });
   };
-
-  static wait(ms: number): Promise<void> {
-    if (ms <= 0) {
-      return Promise.resolve();
-    }
-    return new Promise(resolve => setTimeout(() => resolve(), ms));
-  }
 
   static options: IQuerySuggestPreview = {
     resultTemplate: TemplateComponentOptions.buildTemplateOption(),
@@ -50,17 +42,10 @@ export class QuerySuggestPreview extends Component implements IComponentBindings
       defaultValue: 3,
       min: 1,
       max: 6
-    }),
-    /**
-     *  The amount of focus time (in milliseconds) required on a query suggestion before requesting a preview of its top results.
-     *
-     * **Default:** `200`
-     */
-    executeQueryDelay: ComponentOptions.buildNumberOption({ defaultValue: 200 })
+    })
   };
 
   private lastQueriedSuggestion: Suggestion;
-  private lastTimer: Promise<void>;
   private omniboxAnalytics: OmniboxAnalytics;
 
   /**
@@ -104,11 +89,6 @@ export class QuerySuggestPreview extends Component implements IComponentBindings
 
   private async fetchSearchResultPreviews(suggestion: Suggestion) {
     this.lastQueriedSuggestion = suggestion;
-    const timer = (this.lastTimer = QuerySuggestPreview.wait(this.options.executeQueryDelay));
-    await timer;
-    if (this.lastTimer !== timer || suggestion.text.length === 0) {
-      return [];
-    }
     const previousQueryOptions = this.queryController.getLastQuery();
     previousQueryOptions.q = this.lastQueriedSuggestion.text;
     previousQueryOptions.numberOfResults = this.options.numberOfPreviewResults;
