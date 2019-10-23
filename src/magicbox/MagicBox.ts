@@ -8,6 +8,7 @@ import { MagicBoxClear } from './MagicBoxClear';
 import { Result } from './Result/Result';
 import { Suggestion, SuggestionsManager, FocusableContainerType, IFocusMovement } from './SuggestionsManager';
 import { KeyboardUtils } from '../utils/KeyboardUtils';
+import { ISuggestion } from './SuggestionsList';
 
 export interface Options {
   inline?: boolean;
@@ -67,7 +68,7 @@ export class MagicBoxInstance {
           this.onchange && this.onchange();
         } else {
           this.setText(text);
-          this.onselect && this.onselect(this.getFirstSuggestionText());
+          this.onselect && this.onselect(this.getFirstSuggestion());
         }
       },
       this
@@ -225,7 +226,7 @@ export class MagicBoxInstance {
 
   private updateSuggestions(suggestions: Suggestion[]) {
     this.lastSuggestions = suggestions;
-    const firstSuggestion = this.getFirstSuggestionText();
+    const firstSuggestion = this.getFirstSuggestion();
     this.inputManager.setWordCompletion(firstSuggestion && firstSuggestion.text);
     this.onsuggestions && this.onsuggestions(suggestions);
     each(suggestions, (suggestion: Suggestion) => {
@@ -238,16 +239,15 @@ export class MagicBoxInstance {
     });
   }
 
-  private focusOnSuggestion(suggestion: Suggestion) {
-    if (suggestion == null || suggestion.text == null) {
-      suggestion = this.getFirstSuggestionText();
-      this.inputManager.setResult(this.displayedResult, suggestion && suggestion.text);
-    } else {
-      this.inputManager.setResult(this.grammar.parse(suggestion.text).clean(), suggestion.text);
-    }
+  private focusOnSuggestion(suggestion: ISuggestion) {
+    let suggestionText = suggestion && suggestion.text;
+    this.inputManager.setResult(
+      suggestionText ? this.grammar.parse(suggestionText).clean() : this.displayedResult,
+      suggestionText || this.getFirstSuggestion().text
+    );
   }
 
-  private getFirstSuggestionText(): Suggestion {
+  private getFirstSuggestion(): Suggestion {
     return find(this.lastSuggestions, suggestion => suggestion.text != null);
   }
 
